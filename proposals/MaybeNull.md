@@ -104,15 +104,15 @@ static void M<T>(IEnumerable<T> source)
 }
 ```
 
-If the attribute is applied to a type parameter that is constrained to a reference type or a value type,
-or if the attribute is applied to an explicit type, a warning is reported and the attribute has no effect.
-
 An attribute cannot be applied within a constraint.
 ```C#
 interface I<T, U> where U : [MaybeNull]T // syntax error
 {
 }
 ```
+
+If the attribute is applied to a type parameter that is constrained to a reference type or a value type,
+or if the attribute is applied to an explicit type, a warning is reported and the attribute has no effect.
 
 ### Conversions
 `T` is implicitly convertible to `[MaybeNull]U` with no warning if `T` is implicitly convertible to `U`.
@@ -178,26 +178,20 @@ class B2<T> : A<T> where T : class
 ```
 
 ### Type inference
-`[MaybeNull]T` is a speakable type, at least in declarations
+Type inference with `[MaybeNull]T` may result in unspeakable types. For that reason, the
+inferred types for `var` declarations, and for best type inference and method type inference,
+do not include `[MaybeNull]`.
 
-`[MaybeNull]` is considered in type inference.
-
-The inferred type of a variable initialized with `[MaybeNull]T` is `[MaybeNull]T` even
-though the type is not speakable within a method body.
-```C#
-static T F<T>(IEnumerable<T> source)
-{
-    var x = source.FirstOrDefault(); // [MaybeNull]T x;
-    return x;                        // warning: value may be null
-}
-```
-
-The attribute is considered in best type inference and method type inference.
 ```C#
 static T Copy<T>(T t) { ... }
 
-var x = Copy(source.FirstOrDefault()); // [MaybeNull]T y;
-```
+static List<T> MakeList<T>(T t) { ... }
 
-## See also
-_Previous LDM notes_
+static void F<T>([MaybeNull]T x, [MaybeNull]T y)
+{
+    var z = x;                  // T z;
+    var array = new[] { x, y }; // T[] array
+    var copy = Copy(x);         // T copy;
+    var list = MakeList(x);     // List<T> list
+}
+```
