@@ -1,191 +1,239 @@
+# Discriminated unions
 
-# Discriminated unions / `enum class`
-
-`enum class`es are a new kind of type declaration, sometimes referred to as discriminated unions,
-where each every possible instance the type is listed, and each instance is non-overlapping.
-
-An `enum class` is defined using the following syntax:
+## Syntax
+Discriminated unions are declared as a set of zero or more members in an `enum class` or `enum struct`.
+Each member has a name and an optional type.
 
 ```antlr
-enum_class
-    : 'partial'? 'enum class' identifier type_parameter_list? type_parameter_constraints_clause* 
-      '{' enum_class_body '}'
+discriminated_union
+    : attribute_list* modifier* 'enum' ('class' | 'struct')? identifier
+      type_parameter_list? type_parameter_constraint_clause*
+      '{' (discriminated_union_member (',' discriminated_union_member)*)? ','?'}'
     ;
 
-enum_class_body
-    : enum_class_cases?
-    | enum_class_cases ','
+discriminated_union_member
+    : attribute_list* type? identifier
+
+modifier
+    : 'public'
+    | 'internal'
+    | 'protected'
+    | 'private'
+    | 'unsafe'
     ;
 
-enum_class_cases
-    : enum_class_case
-    | enum_class_case ',' enum_class_cases
+type
+    : type_name
+    | array_type
+    | function_pointer_type
+    | pointer_type
+    | nullable_type
+    | predefined_type
+    | tuple_type
     ;
-
-enum_class_case
-    : enum_class
-    | class_declaration
-    | identifier type_parameter_list? '(' formal_parameter_list? ')'
-    | identifier
-    ;
-
 ```
 
-Sample syntax:
-
+Examples:
 ```C#
+record Rectangle(float Width, float Length);
+record Circle(float Radius);
 enum class Shape
 {
-    Rectangle(float Width, float Length),
-    Circle(float Radius),
+    Rectangle Rect,
+    Circle Circ,
+}
+
+enum struct Option<T> where T : notnull
+{
+    None,
+    T Some,
 }
 ```
 
-## Semantics
+All members are `public`.
 
-An `enum class` definition defines a root type, which is an abstract class of the same name as
-the `enum class` declaration, and a set of members, each of which has a type which is a subtype
-of the root type. If there are multiple `partial enum class` definitions, all members will be
-considered members of the enum class definition. Unlike a user-defined abstract class definition,
-the `enum class` root type is partial by default and defined to have a default *private*
-parameter-less constructor.
+An `enum class` defines an `abstract class` with derived types for typed members.
+An `enum struct` defines a `struct` with properties for typed members.
 
-Note that, since the root type is defined to be a partial abstract class, partial definitions of
-the *root type* may also be added, where standard syntax forms for a class body are allowed.
-However, no types may directly inherit from the root type in any declaration, aside from those
-specified as `enum class` members. In addition, no user-defined constructors are permitted for
-the root type.
-
-There are four kinds of `enum class` member declarations:
-
-* simple class members
-
-* complex class members
-
-* `enum class` members
-
-* value members.
-
-### Simple class members
-
-A simple class member declaration defines a new nested "record" class (intentionally left undefined in
-this document) with the same name. The nested class inherits from the root type.
-
-Given the sample code above,
-
+## Nested member type definitions
+The syntax could be extended to allow defining member types directly within the `enum class` or `enum struct`.
 ```C#
 enum class Shape
 {
-    Rectangle(float Width, float Length),
-    Circle(float Radius)
+    Rectangle(float Width, float Length) Rect,
+    Circle(float Radius) Circ,
 }
 ```
 
-the `enum class` declaration has semantics equivalent to the following declaration
-
+The type definitions above are derived classes of the generated base type.
 ```C#
- abstract partial class Shape
+abstract class Shape
 {
     public record Rectangle(float Width, float Length) : Shape;
     public record Circle(float Radius) : Shape;
 }
 ```
 
-### Complex class members
+There is a distinct difference with `enum class` between a member of an external type and a member of a nested type. In both cases, members are represented as instances of a nested type, but when the member type is defined externally, the nested type results in an additional wrapper instance.
 
-You can also nest an entire class declaration below an `enum class` declaration. It will be treated as
-a nested class of the root type. The syntax allows any class declaration, but it is required for the
-complex class member to inherit from the direct containing `enum class` declaration. 
-
-### `enum class` members
-
-`enum classes` can be nested under each other, e.g.
-
+## Construction
+For `enum class`, each member is represented with a unique type derived from the `abstract` base class.
+Untyped members are singleton instances of derived types.
 ```C#
-enum class Expr
+Shape shape;
+shape = new Shape.Rectangle(width, length);   // Rectangle type defined inline
+shape = new Shape.Circle(new Circle(radius)); // Circle type defined externally
+```
+
+For `enum struct`, each member is represented as a property on the `struct` class.
+Constructor overloads are generated for reference types, and for each unique value type. The overloads take a `int tag` parameter to indicate the member.
+If the member can be unambiguously determined from the type, a constructor overload without `int tag` is also generated.
+Untyped members are `static readonly` fields.
+```C#
+Some<int> s;
+s = Some<int>.None;
+s = new Some<int>(42);
+s = new Some<int>(Some<int>.Tags.Some, 42);
+```
+
+## Conversions
+For `enum class` and `enum struct`, there is an implicit conversion operator for each unique member type to the DU type, and an explicit conversion operator from the DU type to each unique member type.
+If the member type is not unique, or the member type is a base or interface of the DU type, no conversion operators are provided.
+```C#
+Circle circle;
+Shape shape = circle;   // implicit conversion
+circle = (Circle)shape; // explicit conversion
+```
+
+## Pattern matching
+For `switch` statements and expressions, and `is` patterns, when the expression is an instance of a DU, pattern matching is considered to apply to members of the DU rather than the DU instance.
+Pattern matching supports matching members by name in addition to existing patterns.
+If the set of patterns covers all members of the enum, then the switch will be considered exhaustive.
+```C#
+Shape shape = ...;
+float width = shape switch
 {
-    enum class Binary
+    Rectangle r => r.Width, // match member by type
+    Circ: c => c.Diameter,  // match member by name
+};
+```
+
+The equivalent expressed with C#9.
+```C#
+float width = shape.Tag switch
+{
+    Shape.Tags.Rectangle => ((Rectangle)shape).Width,
+    Shape.Tags.Circle => ((Circle)shape).Diameter,
+    _ => throw new Exception()
+};
+```
+
+If the member is untyped, the member name can be used in a pattern without `:`.
+```C#
+Some<int> s = ...;
+int? value = s switch
+{
+    None => null,
+    var i => i
+};
+```
+
+The pattern `null` matches to the DU instance rather than any member.
+```C#
+Shape? shape = ...;
+float? width = shape switch
+{
+    Rect: r => r.Width,
+    Circ: c => c.Diameter,
+    null => null, // shape is null
+};
+```
+
+## Synthesized type
+The synthesized types follow closely those generated for discriminated unions in F#.
+
+An `enum class` is an `abstract class` with members as derived types.
+Consider `enum class Shape { None, Rectangle Rect, Circle Circ }`.
+```C#
+abstract class Shape
+{
+    public sealed class Tags
     {
-        Addition(Expr left, Expr right),
-        Multiplication(Expr left, Expr right)
+        public const int None = 0;
+        public const int Rect = 1;
+        public const int Circ = 2;
+    }
+
+    public abstract int Tag { get; }
+
+    public static implicit operator Shape(Rectangle rectangle) => new Rect(rectangle);
+    public static implicit operator Shape(Circle circle) => new Circ(circle);
+
+    public static explicit operator Rectangle(Shape shape) => ((Rect)shape).Rectangle;
+    public static explicit operator Circle(Shape shape) => ((Circ)shape).Circle;
+
+    public sealed class None : Shape
+    {
+        public static readonly None Instance = new None();
+        public override int Tag => Tags.None;
+    }
+
+    public sealed class Rect : Shape
+    {
+        public Rect(Rectangle rectangle) { Rectangle = rectangle; }
+        public Rectangle Rectangle { get; }
+        public override int Tag => Tags.Rect;
+    }
+
+    public sealed class Circ : Shape
+    {
+        public Circ(Circle circle) { Circle = circle; }
+        public Circle Circle { get; }
+        public override int Tag => Tags.Circ;
     }
 }
 ```
 
-This is almost identical to the semantics of a top-level `enum class`, except that
-the nested enum class defines a nested root type, and everything below the nested enum
-class is a subtype of the nested root type, instead of the top-level root type.
-
+An `enum struct` is a `struct` with members as properties.
+Consider `enum struct Shape { ... }`.
 ```C#
-abstract partial class Expr
+struct Shape
 {
-    abstract partial class Binary : Expr
+    public sealed class Tags
     {
-        public record Addition(Expr left, Expr right) : Binary;
-        public record Multiplication(Expr left, Expr right) : Binary;
+        public const int None = 0;
+        public const int Rect = 1;
+        public const int Circ = 2;
     }
+
+    public static readonly Shape None = new Shape(Tags.None, null);
+
+    public Shape(int tag, object member)
+    {
+        Tag = tag;
+        _member = member;
+    }
+
+    public Shape(Rectangle rectangle) : this(Tags.Rect, rectangle) { }
+    public Shape(Circle circle) : this(Tags.Circ, circle) { }
+
+    public int Tag { get; }
+
+    private readonly object _member;
+
+    public Rectangle Rect => (Rectangle)_member;
+    public Circle Circ => (Circle)_member;
+
+    public static implicit operator Shape(Rectangle rectangle) => new Shape(rectangle);
+    public static implicit operator Shape(Circle circle) => new Shape(circle);
+
+    public static explicit operator Rectangle(Shape shape) => shape.Rect;
+    public static explicit operator Circle(Shape shape) => shape.Circ;
 }
 ```
 
-### Value members
+_How do we recognize a DU from metadata?_
 
-`enum classes` can also contain value members. Value members define public get-only static
-properties on the root type that also return the root type, e.g.
+## Design meetings
 
-```C#
-enum class Color
-{
-    Red,
-    Green
-}
-```
-
-has properties equivalent to
-
-```C#
-partial abstract class Color
-{
-    public static Color Red => ...;
-    public static Color Green => ...;
-}
-```
-
-The complete semantics are considered an implementation detail, but it is guaranteed that
-one unique instance will be returned for each property, and the same instance will be returned
-on repeated invocations.
-
-
-### Switch expression and patterns
-
-There are some proposed adjustments to pattern matching and the switch expression to handle
-`enum classes`. Switch expressions can already match types through the variable pattern, but
-for currently for reference types, no set of switch arms in the switch expression are considered
-complete, except for matching against the static type of the argument, or a subtype.
-
-Switch expressions would be changed such that, if the root type of an `enum class` is the static
-type of the argument to the switch expression, and there is a set of patterns matching all
-members of the enum, then the switch will be considered exhaustive.
-
-Since value members are not constants and do not define new static types, they currently cannot
-be matched by pattern. To make this possible, a new pattern using the constant pattern syntax
-will be added to allow match against `enum class` value members. The match is defined to succeed
-if and only if the argument to the pattern match and the value returned by the `enum class` value
-member would be reference equal, although the implementation is not required to perform this
-check.
-
-
-## Open questions
-
-- [ ] What does the common type algorithm say about `enum class` members? Is this valid code?
-    * `var x = b ? new Shape.Rectangle(...) : new Shape.Circle(...)`
-
-- [ ] Adding a new pattern just for value members seems heavy handed. Is there a more general version
-      construction that makes sense?
-    - [ ] Value members also do not map well to a parallel nested class construction because of this
-
-- [ ] Is switching against an argument with an `enum class` static type guaranteed to be constant-time?
-
-- [ ] Should there be a way to make `enum class`es not be considered complete in the switch
-      expression? Prefix with `virtual`?
-
-- [ ] What modifiers should be permitted on `enum class`?
+- https://github.com/dotnet/csharplang/blob/master/meetings/2019/LDM-2019-11-13.md#initial-discriminated-union-proposal
