@@ -44,7 +44,7 @@ struct Option<T>
 ```
 _Should `enum _Tag { }` be declared outside of `Option<T>` to avoid making it generic?_
 
-Member names can be used in pattern matching.
+Member names can be used in pattern matching. Untyped members use the syntax of constant patterns and typed members use the syntax of property patterns.
 ```C#
 static T GetValue<T>(Option<T> option) =>
     option switch
