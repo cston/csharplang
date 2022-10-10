@@ -185,14 +185,14 @@ The change to ref reassignment rules means `ref` parameters can now escape from 
 #### `scoped` modifier
 <a name="rules-scoped"></a>
 
-The keyword `scoped` will be used to restrict the lifetime of a value. It can be applied to a `ref` or a value that is a `ref struct` and has the impact of restricting the *ref-safe-to-escape* or *safe-to-escape* lifetime, respectively, to the *current method*. For example: 
+The keyword `scoped` will be used to restrict the lifetime of a value. It can be applied to a `ref` or a value that is a `ref struct` and has the impact of restricting the *ref-safe-to-escape* or *safe-to-escape* lifetime, respectively, to the *current block*. For example: 
 
 | Parameter or Local | ref-safe-to-escape | safe-to-escape |
 |---|---|---|
-| `Span<int> s` | *current method* | *calling method* | 
-| `scoped Span<int> s` | *current method* | *current method* | 
+| `Span<int> s` | *current block* | *calling method* | 
+| `scoped Span<int> s` | *current block* | *current block* | 
 | `ref Span<int> s` | *calling method* | *calling method* | 
-| `scoped ref Span<int> s` | *current method* | *calling method* | 
+| `scoped ref Span<int> s` | *current block* | *calling method* | 
 
 In this relationship the *ref-safe-to-escape* of a value can never exceed the *safe-to-escape*.  
 
@@ -223,7 +223,7 @@ The `scoped` annotation also means that the `this` parameter of a `struct` can n
 
 The `scoped` annotation can also be applied to the following locations:
 
-- locals: This annotation sets the lifetime as *safe-to-escape*, or *ref-safe-to-escape* in case of a `ref` local, to of *current method* irrespective of the initializer lifetime. 
+- locals: This annotation sets the lifetime as *safe-to-escape*, or *ref-safe-to-escape* in case of a `ref` local, to of *current block* irrespective of the initializer lifetime. 
 
 ```c#
 Span<int> ScopedLocalExamples()
@@ -310,7 +310,7 @@ Overall there are two `ref` location which are implicitly declared as `scoped`:
 
 The span safety rules will be written in terms of `scoped ref` and `ref`. For span safety purposes an `in` parameter is equivalent to `ref` and `out` is equivalent to `scoped ref`. Both `in` and `out` will only be specifically called out when it is important to the semantic of the rule. Otherwise they are just considered `ref` and `scoped ref` respectively.
 
-When discussing the *ref-safe-to-escape* of arguments that correspond to `in` parameters they will be generalized as `ref` arguments in the spec. In the case the argument is an lvalue then the *ref-safe-to-escape* is that of the lvalue, otherwise it is *current method*. Again `in` will only be called out here when it is important to the semantic of the current rule.
+When discussing the *ref-safe-to-escape* of arguments that correspond to `in` parameters they will be generalized as `ref` arguments in the spec. In the case the argument is an lvalue then the *ref-safe-to-escape* is that of the lvalue, otherwise it is *current block*. Again `in` will only be called out here when it is important to the semantic of the current rule.
 
 #### Return-only escape scope
 <a name="return-only"></a>
@@ -540,7 +540,7 @@ To support this our span safety rules will be updated as follows:
 - `__makeref` will be treated as a method with the signature `static TypedReference __makeref<T>(ref T value)`
 - `__refvalue` will be treated as a method with the signature `static ref T __refvalue<T>(TypedReference tr)`. The expression `__refvalue(tr, int)` will effectively use the second argument as the type parameter.
 - `__arglist` as a parameter will have a *ref-safe-to-escape* and *safe-to-escape* of *current method*. 
-- `__arglist(...)` as an expression will have a *ref-safe-to-escape* and *safe-to-escape* of *current method*. 
+- `__arglist(...)` as an expression will have a *ref-safe-to-escape* and *safe-to-escape* of *current block*. 
 
 Conforming runtimes will ensure that `TypedReference`, `RuntimeArgumentHandle` and `ArgIterator` are defined as `ref struct`. Further `TypedReference` must be viewed as having a `ref` field to a `ref struct` for any possible type (it can store any value). That combined with the above rules will ensure references to the stack do not escape beyond their lifetime.
 
