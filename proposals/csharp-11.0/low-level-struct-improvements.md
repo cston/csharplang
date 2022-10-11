@@ -420,8 +420,7 @@ Impact of this change is discussed more deeply [below](#examples-method-argument
 The `scoped` modifier and `[UnscopedRef]` attribute (see [below](#rules-unscoped)) on parameters also impacts our object overriding, interface implementation and `delegate` conversion rules. The signature for an override, interface implementation or `delegate` conversion can: 
 - Add `scoped` to a `ref` or `in` parameter
 - Add `scoped` to a `ref struct` parameter
-- Remove `[UnscopedRef]` from an `out` parameter
-- Remove `[UnscopedRef]` from a `ref` parameter of a `ref struct` type
+- Remove `[UnscopedRef]` from a `ref`, `in`, or `out` parameter
 
 Any other difference with respect to `scoped` or `[UnscopedRef]` is considered a mismatch.
 
