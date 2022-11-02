@@ -74,20 +74,50 @@ Span<int> s = new[] { i, j, k };   // int[] on the stack
 WriteLine(fmt, new[] { x, y, z }); // object[] on the stack for WriteLine(string fmt, ReadOnlySpan<object> args);
 ```
 
-### Array re-use
-The compiler _may_ reuse an implicitly allocated array across multiple uses within a single thread executing a method:
-- At the same call-site (within a loop) or
-- At distinct call-sites if the lifetime of the spans do not overlap, and the array length is sufficient, and
-  - the element types are managed types that are considered identical by the runtime, or
-  - the element types are unmanaged types of the same size.
+### Array allocation and reuse
+An array argument for a `params` parameter is considered _unaliased_ if:
+- the array argument is implicitly allocated by the compiler,
+- the `params` parameter is `scoped`.
 
-An implicitly allocated array may be reused regardless of whether the array was created on the stack or the heap.
+In those cases, the compiler can assume there are no references to the array that escape the `params` method.
 
-### Lowering implicit allocation
-For the `params` and array creation cases above that are target typed to `Span<T>` or `ReadOnlySpan<T>`, the compiler will lower the creation of spans using an efficient approach, specifically avoiding heap allocations when possible.
-The exact details are still to be determined and may differ based on the target framework and runtime.
+The compiler _may_ reuse an _unaliased_ array across multiple calls when the array length is sufficient and the array element types are considered identical by the runtime.
 
-The guarantee the compiler gives is the span will be the expected size and will contain the expected items at any point in user code.
+Reuse may be across distinct call-sites _and_ repeated calls from the same call-site in a loop.
+
+Reuse is per thread of execution and _within_ the same method.
+Lambda expressions and local functions are considered _distinct_ from the containing method.
+
+Reuse is not needed for calls with zero arguments since those spans can be emitted without allocations as: `new ReadOnlySpan<T>(Array.Empty<T>())`.
+
+For any given element type, the compiler will allocate a reusable array _at least as long as_ the longest `params` argument from the candidate call-sites.
+The reusable array will be allocated _at the maximum required length_ at or before the first call-site.
+_Do we need to guarantee the array is only allocated if used?_
+
+The compiler _may_ allocate _unaliased_ arrays using an efficient approach, specifically avoiding heap allocations when possible. The exact details are still to be determined and may differ based on the target framework and runtime.
+
+The decision to reuse an array _does not_ depend on whether the array was allocated on the stack or the heap.
+
+The guarantee the compiler gives is the argument passed to a `params ReadOnlySpan<T>` will be the expected size and will contain the expected items from the call-site.
+
+For example, assume there is a helper method that the compiler can use to allocate a `Span<T>` where the method may use stack allocation on certain runtimes:
+```csharp
+static Span<T> AllocateSpan<T>(int length);
+```
+
+Then a call to `WriteLine(fmt, x, y, z)` would be emitted as:
+```csharp
+Span<object> __args = AllocateSpan<object>(__max1);
+...
+__args[0] = x;
+__args[1] = y;
+__args[2] = z;
+ReadOnlySpan<object> __tmp = (ReadOnlySpan<object>)__args.Slice(0, 3);
+WriteLine(fmt, __tmp); // static void WriteLine(string format, params ReadOnlySpan<object> args);
+```
+
+
+_Should we allow disabling array allocation optimization or array reuse - perhaps with a `[MethodImpl]` attribute for instance?_
 
 ## Open issues
 ### Is `params Span<T>` necessary?
