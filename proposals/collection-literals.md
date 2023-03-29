@@ -120,48 +120,46 @@ Actual translation of the literal to the corresponding type is defined [below](#
 
 * Single dimensional arrays (e.g. `T[]`)
 * [*Span types*](#span-types)
-* Any interface type `I<T>` implemented by `List<T>` (e.g. `IEnumerable<T>`, `IList<T>`, `IReadOnlyList<T>`)
 * Types that support [*collection initializers*](https://github.com/dotnet/csharpstandard/blob/draft-v7/standard/expressions.md#117154-collection-initializers)
+* Any interface type `I<T>` implemented by `List<T>` (e.g. `IEnumerable<T>`, `IList<T>`, `IReadOnlyList<T>`)
 
 _Open question: Should the set of `List<T>` interfaces be explicit?_
 
 _Constructible collection types are also proposed for [dictionaries](#dictionaries) and for immutable types that implement [`Construct` methods](#construct-methods)._
 
-## Empty collection literal
+## Collection literal translation
+[collection-literal-translation]: #collection-literal-translation
 
-* The empty literal `[]` has no type.  However, similar to the [`null-literal`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/lexical-structure.md#6457-the-null-literal), this literal can be implicitly converted to any [`constructible`](#constructible-collection-types) collection type.
+All elements expressions are evaluated left to right (similar to [array_creation_expression](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#array-creation-expressions)).  These expressions are only evaluated once and any further references to them will refer to the result of that evaluation.
 
-    For example, the following is not legal as there is no *target type* and there are no other conversions involved:
+Having a *known length* allows for efficient construction of a result with the potential for no copying of data and no unnecessary slack space in a result.
 
-    ```c#
-    var v = []; // illegal
-    ```
-
-    However, the following is allowed because of the use of conversions between the branches in the conditional expression:
-
-    ```c#
-    bool b = ...
-    var v = b ? [1, 2, 3] : [];
-    ```
-
-    In this case the type of the empty literal will be `List<int>` due to the [*natural type*](#natural-type) of `[1, 2, 3]`.
-
-## Natural type
-[natural-type]: #natural-type
-
-In the absence of a *constructible collection target type*, a non-empty literal can have a *natural type*.
-
-The *natural type* is determined using the [*best common type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#116315-finding-the-best-common-type-of-a-set-of-expressions) algorithm.
-
-A [*natural element type*](#natural-element-type) `T` is first determined.  If that cannot be determined, the literal has no *natural type*.  If `T` can be determined, the *natural type* of the collection is `List<T>`.
+### Array translation
+For a literal `[e1, e2, ...]` with target type `T`, if `T` is some `T1[]`, then the literal is translated as:
 
 ```c#
-var x = [];     // error: element type cannot be inferred for []
-var y = [1, 2]; // ok: List<int>
-object z = [3]; // ok: List<int>
+T1[] __result = new T1[__len];
+
+__result[0] = __e1;
+__result[1] = __e2;
+
+// further assignments of the remaining elements
 ```
 
-## Span types
+_Open question: Emit `Array<T>.Empty()` for `[]`?_
+
+### Span translation
+If `T` is some `Span<T1>`, then the literal is translated as the array translation above, except that the `__result` initialization is translated as:
+
+```c#
+Span<T1> __result = stackalloc T1[__len];
+
+// same assignments as the array translation
+```
+
+If `T` is some `ReadOnlySpan<T1>`, then the literal is translated the same as for the `Span<T1>` case except that the final result will be that `Span<T1>` [implicitly converted](https://learn.microsoft.com/en-us/dotnet/api/system.span-1.op_implicit#system-span-1-op-implicit(system-span((-0)))-system-readonlyspan((-0))) to a `ReadOnlySpan<T1>`.
+
+### Span types (COMBINE WITH Span translation)
 [span-types]: #span-types
 
 The span types `ReadOnlySpan<T>` and `Span<T>` are both [*constructible collection types*](#constructible-collection-types).  Support for them follows the design for [`params Span<T>`](https://github.com/dotnet/csharplang/blob/main/proposals/params-span.md). Specifically, constructing either of those spans will result in an array T[] created on the [stack](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/unsafe-code.md#229-stack-allocation) if the params array is within limits (if any) set by the compiler. Otherwise the array will be allocated on the heap.
@@ -199,41 +197,47 @@ T[] __array = [...]; // using existing rules
 Span<T> __result = __array;
 ```
 
-## Collection literal translation
-[collection-literal-translation]: #collection-literal-translation
+### Collection initializer translation
+If `T` supports [collection initializers](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#collection-initializers), then:
 
-* All elements expressions are evaluated left to right (similar to [array_creation_expression](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#array-creation-expressions)).  These expressions are only evaluated once and any further references to them will refer to the result of that evaluation.
-
-### Array translation
-[array-translation]: #array-translation
-
-Having a *known length* allows for efficient construction of a result with the potential for no copying of data and no unnecessary slack space in a result.
-
-* For a literal `[e1, e2, ..., eN]`, the literal is translated as:
+* if the type `T` contains an accessible constructor with a single parameter `int capacity`, then the literal is translated as:
 
     ```c#
-    T1[] __result = new T1[N];
+    T __result = new T(capacity: __len);
 
-    __result[0] = __e1;
-    __result[1] = __e2;
-    ...
-    __result[N-1] = __eN;
+    __result.Add(__e1);
+    __result.Add(__e2);
+
+    // further additions of the remaining elements
     ```
 
-## Collection literal translation (MOVE CONTENT)
-[collection-literal-translation]: #collection-literal-translation
+    Note: the name of the parameter is required to be `capacity`.
 
-* The `Add()` methods utilized in a translation do not have to be the same.  For example, `SomeCollection<X> x = [a, b];` may invoke different `SomeCollection.Add` methods for each element in the collection literal.
+    This form allows for a literal to inform the newly constructed type of the count of elements to allow for efficient allocation of internal storage.  This avoids wasteful reallocations as the elements are added.
+
+* otherwise, the literal is translated as:
+
+    ```c#
+    T __result = new T();
+
+    __result.Add(__e1);
+    __result.Add(__e2);
+
+    // further additions of the remaining elements
+    ```
+
+    This allows creating the target type, albeit with no capacity optimization to prevent internal reallocation of storage.
+
+The `Add()` methods utilized in a translation do not have to be the same.  For example, `SomeCollection<X> x = [a, b];` may invoke different `SomeCollection.Add` methods for each element in the collection literal.
 
 ### Interface translation
-[interface-translation]: #interface-translation
 
-Given a target type `T` for a literal, if `T` is some interface `I<T1>` where that interface is implemented by `List<T1>`, then the literal is translated as:
+If `T` is some interface `I<T1>` where that interface is implemented by `List<T1>`, then the literal is translated as:
 
-    ```c#
-    List<T1> __temp = [...]; /* standard translation */
-    I<T1> __result = __temp;
-    ```
+```c#
+List<T1> __temp = [...]; /* standard translation */
+I<T1> __result = __temp;
+```
 
 In other words, the translation works by using the specified rules with the concrete `List<T>` as the target type.  That translated value is then implicitly converted to the resultant interface type.
 
@@ -243,71 +247,39 @@ The compiler is free to not use the specific concrete type if it chooses not to.
 
 Doing this allows the compiler to specialize even further, producing less potential garbage.  For example: `IEnumerable<string> e = [""];` could be implemented with a very specialized `singleton collection` that only requires one allocation, and one pointer, instead of the more heavyweight cost that `List<string>` would incur.
 
-### Translation
-[translation]: #translation
+## Empty collection literal
 
-Having a *known length* allows for efficient construction of a result with the potential for no copying of data and no unnecessary slack space in a result.
+The empty literal `[]` has no type.  However, similar to the [`null`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/lexical-structure.md#6457-the-null-literal) literal, this literal can be implicitly converted to any [*constructible collection type*](#constructible-collection-types).
 
-* For a literal `[e1, e2, etc]`, the translation first starts with the following:
+For example, the following is not legal as there is no *target type* and there are no other conversions involved:
 
-    ```c#
-    int __len = count_of_expression_elements;
-    ```
+```c#
+var v = []; // illegal
+```
 
-* Given a target type `T` for that literal:
+However, the following is allowed because of the use of conversions between the branches in the conditional expression:
 
-    * If `T` is some `T1[]`, then the literal is translated as:
+```c#
+bool b = ...
+var v = b ? [1, 2, 3] : [];
+```
 
-        ```c#
-        T1[] __result = new T1[__len];
+In this case the type of the empty literal will be `List<int>` due to the [*natural type*](#natural-type) of `[1, 2, 3]`.
 
-        __result[0] = __e1;
-        __result[1] = __e2;
+## Natural type
+[natural-type]: #natural-type
 
-        // further assignments of the remaining elements
-        ```
+In the absence of a *constructible collection target type*, a non-empty literal can have a *natural type*.
 
-    *  If `T` is some `Span<T1>`, then the literal is translated as the same as above, except that the `__result` initialization is translated as:
+The *natural type* is determined using the [*best common type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#116315-finding-the-best-common-type-of-a-set-of-expressions) algorithm.
 
-        ```c#
-        Span<T1> __result = stackalloc T1[__len];
+A [*natural element type*](#natural-element-type) `T` is first determined.  If that cannot be determined, the literal has no *natural type*.  If `T` can be determined, the *natural type* of the collection is `List<T>`.
 
-        // same assignments as the array translation
-        ```
-
-    * If `T` is some `ReadOnlySpan<T1>`, then the literal is translated the same as for the `Span<T1>` case except that the final result will be that `Span<T1>` [implicitly converted](https://learn.microsoft.com/en-us/dotnet/api/system.span-1.op_implicit#system-span-1-op-implicit(system-span((-0)))-system-readonlyspan((-0))) to a `ReadOnlySpan<T1>`.
-
-    The above forms (for arrays and spans) are the base representations of the literal value and are used for the following translation rules.
-
-    * If `T` supports [collection initializers](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#collection-initializers), then:
-
-        * if the type `T` contains an accessible constructor with a single parameter `int capacity`, then the literal is translated as:
-
-            ```c#
-            T __result = new T(capacity: __len);
-
-            __result.Add(__e1);
-            __result.Add(__e2);
-
-            // further additions of the remaining elements
-            ```
-
-            Note: the name of the parameter is required to be `capacity`.
-
-            This form allows for a literal to inform the newly constructed type of the count of elements to allow for efficient allocation of internal storage.  This avoids wasteful reallocations as the elements are added.
-
-        * otherwise, the literal is translated as:
-
-            ```c#
-            T __result = new T();
-
-            __result.Add(__e1);
-            __result.Add(__e2);
-
-            // further additions of the remaining elements
-            ```
-
-            This allows creating the target type, albeit with no capacity optimization to prevent internal reallocation of storage.
+```c#
+var x = [];     // error: element type cannot be inferred for []
+var y = [1, 2]; // ok: List<int>
+object z = [3]; // ok: List<int>
+```
 
 ## `Construct` methods
 [construct-methods]: #construct-methods
@@ -332,15 +304,15 @@ Through the use of the [`init`](#init-methods) modifier, existing APIs can direc
 ### Translation
 [translation]: #translation
 
-    * If `T` supports [object creation](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#object-creation-expressions), then [member lookup](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#member-lookup) on `T` is performed to find an accessible `void Construct(T1 values)` method. If found, and if `T1` is a [*constructible*](#constructible-collection-types) collection type, then the literal is translated as:
+* If `T` supports [object creation](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#object-creation-expressions), then [member lookup](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#member-lookup) on `T` is performed to find an accessible `void Construct(T1 values)` method. If found, and if `T1` is a [*constructible*](#constructible-collection-types) collection type, then the literal is translated as:
 
-        ```c#
-        // Generate __storage using existing rules.
-        T1 __storage = [...];
+    ```c#
+    // Generate __storage using existing rules.
+    T1 __storage = [...];
 
-        T __result = new T();
-        __result.Construct(__storage);
-        ```
+    T __result = new T();
+    __result.Construct(__storage);
+    ```
 
 ### `init Construct` methods
 [init-methods]: #init-methods
@@ -521,16 +493,6 @@ If they all have such a property, the literal is considered to have a *known len
     Span<int> span = [a, ..b ? [c, d] : [], f];
     ```
 -->
-
-### Interface translation
-[interface-translation]: #interface-translation
-
-Given a target type `T` for a literal, if `T` is some interface `I<T1>` where that interface is implemented by `List<T1>`, then the literal is translated as:
-
-    ```c#
-    List<T1> __temp = [...]; /* standard translation */
-    I<T1> __result = __temp;
-    ```
 
 ### Known length translation
 [known-length-translation]: #known-length-translation
