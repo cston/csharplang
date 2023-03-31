@@ -2,81 +2,135 @@
 
 Open issues for collection literals to review at LDM (see [proposal](https://github.com/dotnet/csharplang/blob/main/proposals/collection-literals.md)).
 
-## Support dictionaries and dictionary elements
+## Support spread operator
 
-Allow collection literals to represent dictionaries, and provide simple syntax for key-value pairs.
+Support a _spread_ operator to inline an `IEnumerable` within a collection literal. The proposed syntax is `..e`
 
-* The proposed syntax is `k:v`
-
-  The proposed syntax introduces an ambiguity between conditional expression and conditional access within a collection literal:
+* Possible translation of `List<int> list = [x, ..e, y];`
 
     ```c#
-    var v = a ? [b] : c; // [(a ? [b] : c)] or [(a ? [b]) : c]?
+    // List<int> list = [x, ..e, y];
+    List<int> __result = new List<int>();
+    __result.Add(x);
+    foreach (var __i in e)
+        __result.Add(__i);
+    __result.Add(y);
     ```
 
-    To resolve this, we can require users to parenthesize `(a ? [b] : c)` for a conditional expression with collection literal consequence within a collection literal.
+* Avoid extra allocations when the enumerable type has a `Length` or `Count` property, or when `TryGetNonEnumeratedCount<T>(this IEnumerable<T>, out int)` returns true.
 
-* Interfaces `I<TKey, TValue>` implemented by `Dictionary<TKey, TValue>` can be used as _target types_ for collection literals.
+    ```c#
+    List<int> __result = e.TryGetNonEnumeratedCount(out int n)
+        ? new List<int>(capacity: 2 + n)
+        : new List<int>();
+    // add items
+    ```
+
+* Avoid intermediate collections when not observable.
+
+    For instance, avoid generating collections for the conditional expression `b ? [1, 2, 3] : []` below.
     ```csharp
-    IReadOnlyDictionary<string, int> d = ["one":1, "two":2];
+    bool b = ...;
+    var v = [x, y, .. b ? [1, 2, 3] : [ ]];
     ```
 
-* Construction of dictionary collection literals uses the indexer `this[TKey] { get; set; }` rather than `Add(TKey, TValue)`, to provide set semantics rather than add.
-
-* The _natural type_ of a dictionary collection literal is determined from the natural types of the keys and values independently.
-
-## Support spread elements
-
-Allow splatting `IEnumerable` or `IEnumerable<T>` within a collection literal.
-
-* The proposed syntax is `..e`
-
-  The proposed syntax introduces an ambiguity between spreads and ranges within a collection literal:
+* Syntax ambiguity between spreads and ranges in a collection literal. (Since the ambiguity is within a collection literal, this is not a compatibility issue.)
 
     ```c#
     Range[] ranges = [range1, ..e, range2]; // ..e: spread or range?
     ```
-    To resolve this, we can:
 
-    * Require users to parenthesize `(..e)` or include a start index `0..e` if they want a range.
-    * Choose a different syntax (like `...`) for spread.  This would be unfortunate for the lack of consistency with slice patterns.
+    * Require parentheses `(..e)` or include a start index `0..e` for a range, or
+    * Choose a different syntax (like `...`) for spread. (Lack of consistency with slice patterns.)
 
-* A collection literal containing a spread element may not have a known length.
+## Support dictionaries and dictionary elements
+Support collection literals that represent dictionaries, with a simple syntax for key-value pairs. The proposed syntax for key-value pairs is `k:v`
 
-  Construction of the resulting collection may require copying or reallocation, particularly when targeting arrays or spans.
+* Possible translation of `var d = [k1:v1, k2:v2];`
+    ```c#
+    // var d = [k1:v1, k2:v2];
+    var __result = new Dictionary<TKey, TValue>();
+    __result[k1] = v1;
+    __result[k2] = v2;
+    ```
 
-  We can optimize if the expression type has a `Length` or `Count` property, or using `TryGetNonEnumeratedLength()` at runtime. 
+* Interfaces `I<TKey, TValue>` implemented by `Dictionary<TKey, TValue>` can be used as _target types_ for collection literals.
+    ```csharp
+    IReadOnlyDictionary<string, int> d = [x:y, ..e];
+    ```
+
+* The _natural type_ of a collection literal is `Dictionary<TKey, TValue>` when the _best common type_ of the elements is `KeyValuePair<TKey, TValue>`.
+
+* Construction of dictionary collection literals uses the indexer `this[TKey] { get; set; }` rather than `Add(TKey, TValue)`, to provide consistent set semantics rather than add.
+    ```c#
+    // IReadOnlyDictionary<string, int> d = [x:y, ..e];
+    var __result = new Dictionary<string, int>();
+    __result[x] = y;
+    foreach (var (__k, __v) in e)
+        __result[__k] = __v;
+    IReadOnlyDictionary<string, int> d = __result;
+    ```
+
+* Syntax ambiguity in a collection literal between a conditional expression and k:v with conditional access.  (Since the ambiguity is within a collection literal, this is not a compatibility issue.)
+
+    ```c#
+    var v = [a ? [b] : c]; // [a ? ([b]) : c)] or [(a ? [b]) : c]?
+    ```
+
+    Could bind to conditional access, based on precedence, and require parentheses for `a ? ([b]) : c`.
 
 ## Support `Construct` methods
 
-Allow construction of custom collection types through `Construct()` methods.
+Allow collection types with custom `Construct` methods (see [proposal](https://github.com/dotnet/csharplang/blob/main/proposals/collection-literals.md#construct-methods)).
 
-* This is primarily to allow efficient construction of immutable collections. This requires BCL changes to expose `Construct()` methods on existing collections.
+* This is primarily to allow efficient construction of immutable collections, and requires BCL changes to expose `Construct` methods on existing immutable collection types.
 
 * A type `T` can be constructed from a collection literal through the use of a `void Construct(CollectionType)` method when:
 
   * the `Construct` method is found on an instance of `T` (including extension methods?), and
-  * `CollectionType` is some other type known to be a [_constructible type_](constructible-collection-types).
+  * `CollectionType` is some other type known to be a _constructible type_.
 
-* A type with suitable `Construct()` method can be used as a _target type_ for collection literals.
+* A type with suitable `Construct` method can be used as a _target type_ for collection literals.
    ```csharp
-   ImmutableArray<int> result = [a, b, c]; // ImmutableArray<T>.Construct(T[] values)
+   ImmutableArray<T> result = [x, ..e, y]; // ImmutableArray<T>.Construct(T[] values)
    ```
 
-* Through the use of the `init` modifier, existing APIs can directly support collection literals in a manner that allows for no-overhead production of the data the final collection will store.
+* May require an `init Construct()` method to ensure collection instance is not mutated after construction.
 
-  * Like [`init` accessors](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-9.0/init.md#init-only-setters), an `init` method would be an instance method invocable at the point of object creation but become unavailable once object creation has completed. This facility thus prevents general use of such a marked method outside of known safe compiler scopes where the instance value being constructed cannot be observed until complete.
+* To implement: `ImmutableArray<T> result = [x, ..e, y];`
 
-  * In the context of collection literals, using the `init` modifier on the [`Construct` method](#construct-methods) would allow types to trust that the collection instances passed into them cannot be mutated outside of them, and that they are being passed ownership of the collection instance.  This would negate any need to copy data that would normally be assumed to be in an untrusted location.
-
-  * For example, if an `init void Construct(T[] values)` instance method were added to [`ImmutableArray<T>`](https://learn.microsoft.com/en-us/dotnet/api/system.collections.immutable.immutablearray-1), then it would be possible for the compiler to emit the following:
-
+    Implementing explicitly, using a builder:
     ```c#
-    T[] __storage = [a, b, c];
-    ImmutableArray<T> __result = new ImmutableArray<T>();
-    __result.Construct(__storage);
+    var __builder = ImmutableArray.CreateBuilder<int>(initialCapacity: 2 + n);
+
+    __builder.Add(x);
+    __builder.AddRange(e);
+    __builder.Add(y);
+
+    // Create final result. __builder is now garbage.
+    ImmutableArray<int> __result = __builder.MoveToImmutable();
     ```
 
-    `ImmutableArray<T>` would then take that array directly and use it as its own backing storage.  This would be safe because the compiler (following the requirements around `init`) would ensure that no other location in the code would have access to this temporary array, and thus it would not be possible to mutate it behind the back of the `ImmutableArray<T>` instance.
+    Possible translation from collection literal using `init void ImmutableArray<T>.Construct(T[] values)` method:
+    ```c#
+    T[] __storage = new T[2 + n];
+    int __index = 0;
 
-    The `Construct` method can then safely update this to the final non-default state without that intermediate state being visible.
+    __storage[__index++] = x;
+    foreach (var __t in e)
+        __storage[__index++] = __t;
+    __storage[__index++] = y;
+    
+    // Create final result. __storage owned by __result.
+    var __result = new ImmutableArray<T>();
+    __result.Construct(__storage); // init void ImmutableArray<T>.Construct(T[] values)
+    ```
+
+* _Could we use constructors or factory methods instead?_
+
+    For instance, with support for `params ReadOnlySpan<T>`:
+    ```c#
+    public struct ImmutableArray<T>
+    {
+        public ImmutableArray(params ReadOnlySpan<T> values) { ... }
+    }
