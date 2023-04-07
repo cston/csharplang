@@ -90,13 +90,13 @@ Collection literals are [target-typed](https://github.com/dotnet/csharplang/blob
 
 * In the following sections, examples of literals without a `k: v` element should assumed to not have any `dictionary_element` in them. Any usages of `..s` should be assumed to be a spread of a non-dictionary value.  Sections that refer to dictionary behavior will call that out.
 
-* The *iteration type* of `..s_n` is the type of the *iteration variable* determined as if `s_n` were used as the expression being iterated over in a [`foreach_statement`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement).
+* The *iteration type* of `..s_n` is the type of the *iteration variable* determined as if `s_n` were used as the expression being iterated over in a [`foreach_statement`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement). _Is `object` the *iteration type* of `IEnumerable` or is there no *iteration type* in that case?_
 
 * Variables starting with `__name` are used to represent the results of the evaluation of `name`, stored in a location so that it is only evaluated once.  For example `__e1` is the evaluation of `e1`.
 
 * `List<T>`, `Dictionary<TKey, TValue>` and `KeyValuePair<TKey, TValue>` refer to the respective types in the `System.Collections.Generic` namespace.
 
-* The specification defines a [translation](#collection-literal-translation) of the literal to existing C# constructs.  Similar to the [`query expression translation`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11173-query-expression-translation), the literal is itself only legal if the translation would result in legal code.  The purpose of this rule is to avoid having to repeat other rules of the language that are implied (for example, about convertibility of expressions when assigned to storage locations).
+* The specification defines a [translation](#collection-literal-translation) of the literal to existing C# constructs.  Similar to the [_query expression translation_](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11173-query-expression-translation), the literal is itself only legal if the translation would result in legal code.  The purpose of this rule is to avoid having to repeat other rules of the language that are implied (for example, about convertibility of expressions when assigned to storage locations).
 
 * An implementation is not required to translate literals exactly as specified below.  Any translation is legal as long as the same result is produced and there are no observable differences (outside of timing) in the production of the result.
 
@@ -123,10 +123,13 @@ Actual translation of the literal to the corresponding is defined [below](#colle
 * Types with a suitable [`Construct` method](#construct-methods).
 * Instantiations of any interface type `I<T>` implemented by `List<T>`.  For example, `IEnumerable<T>`, `IList<T>`, `IReadOnlyList<T>`.
 * Instantiations of any interface type `I<TKey, TValue>` implemented by `Dictionary<TKey, TValue>`.  For example, `IDictionary<TKey, TValue>`, `IReadOnlyDictionary<TKey, TValue>`.
-* Types that support [`collection initializers`](https://github.com/dotnet/csharpstandard/blob/draft-v7/standard/expressions.md#117154-collection-initializers).
+* Types that support [_collection initializers_](https://github.com/dotnet/csharpstandard/blob/draft-v7/standard/expressions.md#117154-collection-initializers).
 
 `List<T>` and `Dictionary<TKey, TValue>` are both constructible by virtue of them both supporting `collection initializers`.
 
+A collection literal is implicitly convertible to a _constructible collection type_. The conversion is a _collection literal conversion_.
+
+_What specifically does it mean to be a type that supports collection initializers? Does the type have to be a non-abstract type, or a type parameter with `new()` or `struct` constraint? Does it need a public constructor with specific signature?_
 
 ## `Construct` methods
 [construct-methods]: #construct-methods
@@ -135,7 +138,7 @@ While certain types (like arrays and spans) can always be constructed with a col
 
 * the `Construct` method is found on an instance of `T` (including through [extension methods](https://github.com/dotnet/csharpstandard/blob/draft-v7/standard/expressions.md#11783-extension-method-invocations)), and
 
-* `CollectionType` is some other type known to be a [`constructible`](constructible-collection-types) type.
+* `CollectionType` is some other type known to be a [_constructible_](constructible-collection-types) type.
 
 If found, the collection can be constructed by creating a fresh instance of its type using `new T()`, producing the corresponding argument to pass to `Construct`, and then calling that method on the fresh instance.  `new T()` supports all structs, including those without a `parameterless struct constructor`.
 
@@ -147,7 +150,7 @@ Through the use of the [`init`](#init-methods) modifier, existing APIs can direc
 ### `init Construct` methods
 [init-methods]: #init-methods
 
-* Like [`init accessors`](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-9.0/init.md#init-only-setters), an `init` method would be an instance method invocable at the point of object creation but become unavailable once object creation has completed. This facility thus prevents general use of such a marked method outside of known safe compiler scopes where the instance value being constructed cannot be observed until complete.
+* Like [_`init` accessors_](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-9.0/init.md#init-only-setters), an `init` method would be an instance method invocable at the point of object creation but become unavailable once object creation has completed. This facility thus prevents general use of such a marked method outside of known safe compiler scopes where the instance value being constructed cannot be observed until complete.
 
 * In the context of collection literals, using the `init` modifier on the [`Construct` method](#construct-methods) would allow types to trust that the collection instances passed into them cannot be mutated outside of them, and that they are being passed ownership of the collection instance.  This would negate any need to copy data that would normally be assumed to be in an untrusted location.
 
@@ -161,7 +164,7 @@ Through the use of the [`init`](#init-methods) modifier, existing APIs can direc
 
     `ImmutableArray<T>` would then take that array directly and use it as its own backing storage.  This would be safe because the compiler (following the requirements around `init`) would ensure that no other location in the code would have access to this temporary array, and thus it would not be possible to mutate it behind the back of the `ImmutableArray<T>` instance.
 
-    The above also demonstrates that this approach can work with struct types which do not have a [`parameterless struct constructor`](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-10.0/parameterless-struct-constructors.md).  In the above, the call to `new ImmutableArray<T>()` is equivalent to `default(ImmutableArray<T>)`, (producing an `ImmutableArray<T>` whose [`IsDefault`](https://learn.microsoft.com/en-us/dotnet/api/system.collections.immutable.immutablearray-1.isdefault) property is initially true.  However, the `Construct` method can then safely update this to the final non-default state without that intermediate state being visible.
+    The above also demonstrates that this approach can work with struct types which do not have a [_parameterless struct constructor_](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-10.0/parameterless-struct-constructors.md).  In the above, the call to `new ImmutableArray<T>()` is equivalent to `default(ImmutableArray<T>)`, (producing an `ImmutableArray<T>` whose [`IsDefault`](https://learn.microsoft.com/en-us/dotnet/api/system.collections.immutable.immutablearray-1.isdefault) property is initially true.  However, the `Construct` method can then safely update this to the final non-default state without that intermediate state being visible.
 
 * This formalization is quite beneficial because the only existing mechanism to (safely) create an ImmutableArray with values without copying is both excessively verbose and produces unavoidable garbage:
 
@@ -181,7 +184,7 @@ Through the use of the [`init`](#init-methods) modifier, existing APIs can direc
 
 ## Empty collection literal
 
-* The empty literal `[]` has no type.  However, similar to the [`null-literal`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/lexical-structure.md#6457-the-null-literal), this literal can be implicitly converted to any [`constructible`](#constructible-collection-types) collection type.
+* The empty literal `[]` has no type.  However, similar to the [_null-literal_](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/lexical-structure.md#6457-the-null-literal), this literal can be implicitly converted to any [_constructible_](#constructible-collection-types) collection type.
 
     For example, the following is not legal as there is no *target type* and there are no other conversions involved:
 
@@ -274,6 +277,20 @@ Each element of the literal is examined in the following fashion:
 * Given:
 
     ```c#
+    IEnumerable e1 = [1, 2];
+    var e2 = [..e1];    // List<object> or error?
+    var e3 = [..e1, 3]; // List<object> or List<int>?
+    ```
+
+    Should `IEnumerable` contribute `object` to the *best common type* or no contribution?
+
+    Should `[..e1]` bind successfully to any target type collection?
+    
+    Should `[..e1]` have a natural type?
+
+* Given:
+
+    ```c#
     Dictionary<string, object> d1 = ...;
     Dictionary<object, string> d2 = ...;
     var d3 = [..d1, ..d2];
@@ -332,7 +349,7 @@ foreach (var x in y)
 }
 ```
 
-The compiler is allowed to translate that using `stackalloc` however it wants, as long as the `Span` meaning stays the same and [`span-safety`](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-7.2/span-safety.md) is maintained.  For example, it can translate the above to:
+The compiler is allowed to translate that using `stackalloc` however it wants, as long as the `Span` meaning stays the same and [_span-safety_](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-7.2/span-safety.md) is maintained.  For example, it can translate the above to:
 
 ```c#
 Span<int> __buffer = stackalloc int[3];
