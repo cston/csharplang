@@ -90,8 +90,6 @@ Collection literals are [target-typed](https://github.com/dotnet/csharplang/blob
 
 * In the following sections, examples of literals without a `k: v` element should be assumed to not have any `dictionary_element` in them. Any usages of `..s` should be assumed to be a spread of a non-dictionary value.  Sections that refer to dictionary behavior will call that out.
 
-* The *iteration type* of `..s_n` is the type of the *iteration variable* determined as if `s_n` were used as the expression being iterated over in a [`foreach_statement`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement).
-
 * Variables starting with `__name` are used to represent the results of the evaluation of `name`, stored in a location so that it is only evaluated once.  For example `__e1` is the evaluation of `e1`.
 
 * `List<T>`, `Dictionary<TKey, TValue>` and `KeyValuePair<TKey, TValue>` refer to the respective types in the `System.Collections.Generic` namespace.
@@ -161,6 +159,89 @@ Types for which there is an implicit collection literal conversion from a collec
 
 ## Construction
 _Give specific ordering for determining how to construct the constructible collection types._
+
+## Spread elements
+```csharp
+int[] a = [1, 2, 3];
+int[] b = [..a, 4];
+```
+
+The *iteration type* of `..s_n` is the type of the *iteration variable* determined as if `s_n` were used as the expression being iterated over in a [`foreach_statement`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement).
+
+A `spread_element` has a *known length* if the _compile-time type_ contains an accessible instance `int Length { get; }` or `int Count { get; }` property in the same fashion as [list patterns](https://github.com/dotnet/csharplang/blob/main/proposals/list-patterns.md); otherwise, the `spread_element` has an *unknown length*.
+
+A translation of `List<int> y = [..x];`:
+```csharp
+var __result = new List<int>();
+foreach (var __i in __x)
+    __result.Add(i);
+```
+
+*Open question:* Should the translation use `c.AddRange(s)` when the _compile-time type_ of `s` implements `IEnumerable<>` and the _compile-time type_ of `c` has an applicable `AddRange()` method? What if that requires boxing `s`?
+
+*Open question:* Should the evaluation of spread elements be lazy?
+
+* For instance, should the following be possible:
+    ```csharp
+    static IEnumerable<int> GetIntegers()
+    {
+        for (int i = 0; ; i++)
+            yield return i;
+    }
+
+    IEnumerable<int> e = [..GetIntegers()];
+    int first = e.First();
+    ```
+
+## Dictionaries
+Dictionaries are collection types that implement `System.Collections.IDictionary`.
+```csharp
+Dictionary<string, int> d1 = ["Alice": 42, "Bob": 43];
+```
+
+`expression_element` is only supported if the element type is some `KeyValuePair<,>` or `dynamic`.
+
+`spread_element` is only supported if the enumerated element type is some `KeyValuePair<,>` or `dynamic`.
+
+`dictionary_element` is only supported for _non-dictionary collection literals_ if the element type of the collection is some `KeyValuePair<,>`.
+
+*Open question:* Should dictionary collection literals use _overwrite_ semantics or _add_ semantics? That is, should dictionary literals allow duplicate keys or throw on duplicates?
+
+* A translation of `Dictionary<K, V> d = [e1, k1:v1, ..s1];` using the dictionary indexer for _overwrite_ semantics:
+    ```csharp
+    var __result = new Dictionary<K, V>();
+
+    __result[__e1.Key] = __e1.Value;
+    __result[__k1] = __v1;
+    foreach (var __t in __s1)
+        __result[__t.Key] = __t.Value;
+    ```
+
+* A translation using the dictionary `Add()` method with _add (and throw)_ semantics:
+    ```csharp
+    var __result = new Dictionary<K, V>();
+
+    __result.Add(__e1.Key, __e1.Value);
+    __result.Add(__k1, __v1);
+    foreach (var __t in __s1)
+        __result.Add(__t.Key, __t.Value);
+    ```
+
+* Using _add_ semantics would be consistent with _classic collection initializers_ (e.g. `new Dictionary<K, V> { { k1, v1 }, ... }`).
+
+* Also, consider a dictionary type with a custom construct method. For instance, the construct method for `ImmutableDictionary<K, V>` might be the following:
+    ```csharp
+    // ImmutableDictionary d = [e1, k1:v1, ..s1, ...];
+    public static class ImmutableDictionary
+    {
+        public static ImmutableDictionary<TKey, TValue> CreateRange<TKey, TValue>(
+            ReadOnlySpan<KeyValuePair<TKey, TValue>> items);
+    }
+    ```
+
+    The BCL has similar construction methods for dictionaries, either as constructors or static helpers, that typically take an `IEnumerable<KeyValuePair<K, V>>`. Those methods usually disallow duplicated keys with distinct values, so the construct method above will probably need to work similarly. In short, the construct method itself may have _add (and throw)_ semantics.
+
+*Open question:* Do we need to support custom comparers?
 
 ## `Construct` methods
 [construct-methods]: #construct-methods
@@ -292,6 +373,8 @@ List<string> e3 = [..e1];  // error?
     ```
 
     The *best common type* between `[1, 2, 3]` and `[]` causes `[]` to take on the type `[1, 2, 3]`, which is `List<int>` as per the existing *natural type* rules. As this is a constructible collection type, `[]` is treated as target-typed to that collection type.
+
+## Conversions
 
 ## Type inference
 ```c#
@@ -451,7 +534,7 @@ Given a target type `T` for a literal:
     I<T1> __result = __temp;
     ```
 
-In other words, the translation works by using the specified rules with the concrete `List<T>` or `Dictionary<TKey, TValue>` types as the target type.  That translated value is then implicitly converted to the resultant interface type.
+In other words, the translation works by using the specified rules with the concrete `List<T>` or `Dictionary<TKey, TValue>` types as the target type.  That translated value is then implicitly converted to the resultant interface type. _This is not necessarily true, and should not be spec'ed as such._
 
 The compiler is free to not use the specific `List<T>` or `Dictionary<TKey, TValue>` types if it chooses not to.  Specifically:
 1. it may choose to use entirely different types altogether (including types not referenceable by the user).
@@ -964,6 +1047,36 @@ However, given the breadth and consistency brought by the new literal syntax, we
 
 ## Unresolved questions
 [unresolved]: #unresolved-questions
+
+* When adding spread element `s` to collection `c`, when should the compiler emit `c.AddRange(s)` and when should the compiler emit `foreach (var __i in s) c.Add(__i);`?
+
+* How do we recognize a dictionary type? Implements `IDictionary`, or implements `IDictionary<K, V>`, or some pattern?
+
+* How to create a dictionary with a specific comparer? In general, how to create an instance of a collection type with some specific constructor parameters?
+
+* Should dictionaries use add or overwrite semantics?
+
+  ```csharp
+  Dictionary<K, V> d3 = [..d1, ..d2, k:v]; // what if duplicate keys?
+  ```
+
+  If we support efficient construction of a custom dictionary type such as `ImmutableDictionary<K, V>`, the construct method might be:
+
+  ```csharp
+  public static class ImmutableDictionary
+  {
+      public static ImmutableDictionary<TKey, TValue> CreateRange<TKey, TValue>(
+          ReadOnlySpan<KeyValuePair<TKey, TValue>> items);
+  }
+  ```
+
+  That means the decision for add vs. overwrite semantics is left to the implementation of that method. We already have similar methods in the BCL for constructing dictionaries from flat lists, usually `IEnumerable<KeyValuePair<K, V>>` rather than `ReadOnlySpan<KeyValuePair<K, V>>`, and in most cases those methods throw an exception if there are duplicate keys or at least duplicate keys with distinct values. For consistency, the construct method above will likely need to throw on duplicates as well.
+
+* Should `dictionary_element` be usable in a non-dictionary collection? If so, what are the restrictions?
+
+* Should `expression_element` and `spread_element` be usable in a dictionary? If so, what are the restrictions?
+
+* Are collection literal elements, including `spread_element`, always evaluated eagerly? What if the collection type is `IEnumerable<T>`?
 
 * Can/should the compiler emit Array.Empty for `[]`?  Should we mandate that it does this, to avoid allocations whenever possible?
 
