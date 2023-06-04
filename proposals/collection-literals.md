@@ -411,26 +411,156 @@ Dictionary construction uses indexer instance properties rather than `Add()` met
 ## Collection literal translation
 [collection-literal-translation]: #collection-literal-translation
 
-* The types of each `spread_element` expression are examined to see if they contain an accessible instance `int Length { get; }` or `int Count { get; }` property in the same fashion as [list patterns](https://github.com/dotnet/csharplang/blob/main/proposals/list-patterns.md).  
-If they all have such a property, the literal is considered to have a *known length*.
+### Evaluation order
+Collection literal element expressions are evaluated left to right (similar to *[array_creation_expression](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#array-creation-expressions)*). These expressions are only evaluated once and any further references to them will refer to the result of that evaluation.
 
-    * In examples below, references to `.Count` refer to this computed length, however it was obtained.
+### Known length
+A *spread element* has a *known length* if the compile time *type* of the spread element is *[countable](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-8.0/ranges.md#implicit-index-support)*.
 
-    * A literal without any `spread_element` expressions has *known length*.
+> A type is ***Countable*** if it  has a property named `Length` or `Count` with an accessible getter and a return type of `int`.
 
-    * If at least one `spread_element` cannot have its count of elements determined, then the literal is considered to have an *unknown length*.
+A *collection literal* has a *known length* if all *spread elements* in the literal have known length.
 
-    * Each `spread_element` can have a different type and a different `Length` or `Count` property than the other elements.
+Having a *known length* does not affect what collections can be created.  It only affects how efficiently the construction can happen.
 
-    * Having a *known length* does not affect what collections can be created.  It only affects how efficiently the construction can happen. For example, a *known length* literal is statically guaranteed to efficiently create an array or span at runtime.  Specifically, allocating the precise storage needed, and placing all values in the right location once.
+A literal without a *known length* at compile time may still be constructed efficiently at runtime. For example, the compiler *may* use helpers such as [`TryGetNonEnumeratedCount<T>(this IEnumerable<T>, out int)`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.trygetnonenumeratedcount) to determine the length of spread elements *at runtime*.
 
-* A literal without a *known length* does not have a guarantee around efficient construction.  However, such a literal may still be efficient at runtime.  For example, the compiler is free to use helpers like [`TryGetNonEnumeratedCount(IEnumerable<T>, out int count)`](https://learn.microsoft.com/en-us/dotnet/api/system.linq.enumerable.trygetnonenumeratedcount) to determine *at runtime* the capacity needed for the constructed collection.  As above, in examples below, references to `.Count` refer to this computed length, however it was obtained.
+The *countable* property of a spread element may be called one or more times after the element has been evaluated.
 
-* All elements expressions are evaluated left to right (similar to [array_creation_expression](https://github.com/dotnet/csharplang/blob/main/spec/expressions.md#array-creation-expressions)).  These expressions are only evaluated once and any further references to them will refer to the result of that evaluation.
+If the compiler generates code to determine the length at runtime, the generated code may have two separate paths for construction. For example:
+```c#
+// int[] array = [1, ..GetEnumerable()];
 
-* Evaluation of the element expressions happens entirely first.  Only after all those evaluations happen are calls to `Count` (or `Length` or `TryGetNonEnumeratedCount`) and all enumerations made.
+var __e = GetEnumerable();
+int[] __array;
 
-*  All methods/properties utilized in a translation (for example `Add`, `this[...]`, `Length`, `Count`, etc.) do not have to be the same.  For example, `SomeCollection<X> x = [a, b];` may invoke different `SomeCollection.Add` methods for each element in the collection literal.
+if (e.TryGetNonEnumeratedCount(out int __n))
+{
+    __array = new int[__n + 1];
+    int __index = 0;
+    __array[__index++] = 1;
+    foreach (int __item in __e)
+        __array[__index++] = __item;
+}
+else
+{
+    List<int> __temp = new List<int>();
+    __temp.Add(1);
+    foreach (int __item in __e)
+        __temp.Add(__item);
+    __array = __list.ToArray();
+}
+```
+
+### Array translation
+The translations for a collection literal converted to an *array type* `T[]` are as follows:
+
+If the collection literal has *known length* `n`, the array result is allocated and populated directly.
+```c#
+T[] __result = new T[__n];
+// assign elements
+```
+
+If the collection literal has *unknown length*, a temporary buffer *may be* created and populated with the collection before converting to the array result. For example, a `List<T>` might be used.
+```c#
+List<T> __temp = ...; // create and populate List<T>
+T[] __result = __temp.ToArray();
+```
+
+An *expression element* `e` in an *array type* is assigned with the array indexer. If there are no preceding *spread elements*, the array index will be a constant.
+```c#
+__result[__index] = (T)__e;
+```
+
+A *spread element* `s` of *array type* `U[]`, or *span type* `Span<U>` or `ReadOnlySpan<U>`, is enumerated with `for`.
+```c#
+for (int __i = 0; __i < __s.Length; __i++)
+    _result[__index++] = (T)__s[__i];
+```
+
+Otherwise, a *spread element* `s` is enumerated with `foreach`.
+```c#
+foreach (U __item in __s)
+    _result[__index++] = (T)__item;
+```
+
+_Should we use `Array.Copy()` or `Array.CopyTo()` when the spread is an array?_
+
+_Should we use `ICollection<T>.CopyTo(T[], int)` when the spread is a reference type that implements `ICollection<T>`?_
+
+### Span translation
+The translations for a collection literal converted to `System.Span<T>` or `System.ReadOnlySpan<T>` are as follows:
+
+If the collection literal has *known length* `n` and target type `Span<T>`, the span result is allocated and populated directly.
+
+If the compiler can determine the span does not escape the current scope, the compiler *may* allocate the storage on the stack using *[inline array](https://github.com/dotnet/csharplang/blob/main/proposals/inline-arrays.md)*.
+```c#
+[InlineArray(4)]
+public struct InlineArray4<T> { ... }
+
+InlineArray4<T> __storage; // __n == 4
+Span<T> __result = (Span<T>)__storage;
+// assign elements
+```
+
+If the span may escape the current scope, the span storage is allocated on the heap.
+```c#
+Span<T> __result = new T[__n];
+// assign elements
+```
+
+If the collection literal has *unknown length*, a temporary buffer *may be* created and populated with the collection before converting to the span result. For example, a `List<T>` might be used.
+```c#
+List<T> __temp = ...; // create and populate List<T>
+Span<T> __result = __temp.ToArray();
+```
+
+If the collection literal has *unknown length* and the compiler can determine the span does not escape the current scope, the compiler could potentially use an *inline array* to allocate the storage on the stack. However, since inline arrays require a size chosen at compile-time, the optimization may only apply to collections with lengths in a limited range. For example:
+```c#
+// Span<T> span = [..GetEnumerable()];
+
+var __e = GetEnumerable();
+InlineArray8<T> __storage;
+Span<T> __span;
+
+if (e.TryGetNonEnumeratedCount(out int __n) && __n < 8)
+{
+    __span = __storage.Slice(0, __n);
+    int __index = 0;
+    foreach (T __item in __e)
+        __span[__index++] = __item;
+}
+else
+{
+    T[] __temp = ...; // create and populate array
+    __span = new Span<T>(___temp);
+}
+```
+
+If the collection literal has target type `ReadOnlySpan<T>`, the translation is essentially the translation to the corresponding `Span<T>` with a final conversion of the result to `ReadOnlySpan<T>`.
+```c#
+Span<T> __temp = ...; // create and populate Span<T>
+ReadOnlySpan<T> __result = (ReadOnlySpan<T>)__temp;
+```
+
+_What about *expression element* and *spread element* translation?_
+
+### Builder translation
+The translations for a collection literal converted to *type* with a custom builder pattern are as follows:
+
+If the collection literal has *known length* `n`, the type instance is allocated through the builder and populated through the corresponding span.
+
+_Describe both builder patterns - input `ReadOnlySpan<T>` and output `Span<T>`._
+
+### List<T> translation
+
+_Why is List<T> a special case? It's for I<T> cases where the known length is not specifically handles (in particular, 0 length)._
+
+_I thought we were returning some type no more mutable than implied by the target type. If the target type is IEnumerable<T>, the result should not be mutable._
+
+...
+
+_For a *spread element* `Si` with a *known length* `__Ni`, we could use `__result.EnsureCapacity(__index + __Ni)`. Do we want to do that or simply call `__result.AddRange(__Si)` if applicable and if `__Si` is a reference type?_
 
 ### Interface translation
 [interface-translation]: #interface-translation
