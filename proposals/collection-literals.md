@@ -399,15 +399,6 @@ T[] __array = [...]; // using existing rules
 Span<T> __result = __array;
 ```
 
-## Collection initializers
-[collection-initializers]: #collection-initializers
-
-_Include text from [*collection initializers*](https://github.com/dotnet/csharpstandard/blob/draft-v7/standard/expressions.md#117154-collection-initializers)_.
-
-Non-dictionary construction uses `Add()` instance methods or extension methods.
-
-Dictionary construction uses indexer instance properties rather than `Add()` methods to ensure consistent _overwrite semantics_ rather than _add semantics_.
-
 ## Collection literal translation
 [collection-literal-translation]: #collection-literal-translation
 
