@@ -51,9 +51,15 @@ The overload resolution rules for [*11.6.4.6 better conversion target*](https://
 
 - Use distinct method names rather than overloads.
 
-- Use an extension method to overload an instance method. The extension method will only be considered when the instance method is inapplicable which avoids ambiguities when both are applicable but it also prevents the compiler from choosing the better overload.
+  This alternative is not ideal for the BCL which already uses overloads for scenarios such as collection construction where a `ReadOnlySpan<T>` overload might be useful. And using distinct names will not work for constructors.
+
+- Use an extension method to overload an instance method. The extension method will only be considered when the instance method is inapplicable which avoids ambiguities when both are applicable.
+
+  This alternative prevents the compiler from choosing the better overload however. And using extension methods will not work for constructors.
 
 ## Unresolved questions
 [unresolved]: #unresolved-questions
+
+- Should the updated behavior apply to array arguments only rather than all expressions that are implicitly convertible to both collection interfaces and spans?
 
 ## Design meetings
