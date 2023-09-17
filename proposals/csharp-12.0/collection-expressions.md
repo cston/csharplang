@@ -81,7 +81,7 @@ Collection literals are [target-typed](https://github.com/dotnet/csharplang/blob
   * Literals with no `spread_element` in them.
   * Literals with arbitrary ordering of any element type.
 
-* The *iteration type* of `..s_n` is the type of the *iteration variable* determined as if `s_n` were used as the expression being iterated over in a [`foreach_statement`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement).
+* The *iteration type* of `..s_n` is the type determined as if `s_n` were used as the expression being iterated over in a [`foreach_statement`](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement).
 * Variables starting with `__name` are used to represent the results of the evaluation of `name`, stored in a location so that it is only evaluated once.  For example `__e1` is the evaluation of `e1`.
 * `List<T>`, `IEnumerable<T>`, etc. refer to the respective types in the `System.Collections.Generic` namespace.
 * The specification defines a [translation](#collection-literal-translation) of the literal to existing C# constructs.  Similar to the [*query expression translation*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11173-query-expression-translation), the literal is itself only legal if the translation would result in legal code.  The purpose of this rule is to avoid having to repeat other rules of the language that are implied (for example, about convertibility of expressions when assigned to storage locations).
@@ -167,6 +167,8 @@ The attribute is not inherited although the attribute can be applied to a base `
 
 The collection type must have an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement).
 
+A warning should be reported if the *iteration type* depends on an extension method `GetEnumerator` rather than an instance method.
+
 For the *create method*:
 
 * The *builder type* must be a non-generic `class` or `struct`.
@@ -210,12 +212,29 @@ ImmutableArray<int> ia =
     ImmutableArray.Create((ReadOnlySpan<int>)__tmp);
 ```
 
+## Spreads
+[spreads]: #spreads
+
+The *iteration type* of a *spread element* `..e` is the *iteration type* of `e` as defined by the [*foreach statement*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement).
+
+> - If the type `X` of *expression* is an array type ... the iteration type is the element type of the array type `X`.
+> - If the type `X` of *expression* is `dynamic` ... the iteration type is `dynamic` ... .
+> - Otherwise, determine whether the type `X` has an appropriate `GetEnumerator` method:
+>   - ... the iteration type is the type of the `Current` property. The `Current` property may include the `ref` modifier, in which case, the expression returned is a *variable_reference* that is optionally read-only.
+> - Otherwise, check for an enumerable interface:
+>   - *[If the interface is `IEnumerable<T>`]* ... the iteration type is `T`.
+>   - *[If the interface is `IEnumerable`]* ... the iteration type is `object`.
+
+The `GetEnumerator` method identified above may be an extension method.
+
 ## Construction
 [construction]: #construction
 
 A collection expression has a *known length* if the compile-time type of each *spread element* in the collection expression is [*countable*](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-8.0/ranges.md#adding-index-and-range-support-to-existing-library-types).
-The *countable* properties, `Length` and `Count`, are assumed to have no side effects.
-The *countable* properties do not include *explicit implementations* of `ICollection<T>.Count` or `ICollection.Count`.
+
+The *countable* properties do not include *explicit implementations* of interface properties such as `ICollection<T>.Count`.
+
+`Length` and `Count` properties, and `GetEnumerator` methods, are assumed to have no side effects.
 
 If the target type is a *struct* or *class type* that implements `System.Collections.IEnumerable`, and the target type does not have a *[create method](#create-methods)*, the construction of the collection instance as follows:
 
@@ -233,14 +252,13 @@ If the target type is an *array*, a *span*, a type with a *[create method](#crea
 
 * If the target type is an *array*, a *span*, or a type with a *create method*, and the collection expression has a *known length*, the compiler will allocate the underlying storage directly with the expected length. If the collection length is not known, an intermediate buffer *may be* used to construct the collection before copying to the target collection instance.
 
-* *The compiler *may* attempt to determine the length *at runtime* for otherwise unknown length spread elements, by using `ICollection<T>` or `ICollection`, or using alternatives when the behavior difference is not observable &mdash; for well-known collection types in particular.*
+* *The compiler *may* determine the length *at runtime* for otherwise unknown length spread elements by using well-known interfaces or types when the behavior difference is not otherwise observable.*
 
 * For each element in order:
   * If the element is an *expression element*, the evaluated expression is assigned to the collection.
   * If the element is a *spread element* then:
-    * If the spread element *expression* type implements `IEnumerable<T>`, the interface implementation *may be* used to iterate the items, with each item added to the collection in order.
-    * Otherwise, the spread element *expression* is iterated using the applicable `GetEnumerator` instance or extension method, and each item from the enumerator is assigned to the collection in order.
-    * *The compiler *may* use alternatives for copying items from the spread element *expression* when the behavior difference is not observable &mdash; when copying between well-known collection types in particular.*
+    * The spread element *expression* is iterated using the applicable `GetEnumerator` instance or extension method, and each item from the enumerator is assigned to the collection in order.
+    * *The compiler *may* copy items from the spread element *expression* by using well-known interfaces or types directly when the behavior difference is not otherwise observable.*
 
 ## Empty collection literal
 
