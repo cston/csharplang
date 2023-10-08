@@ -438,14 +438,32 @@ In the updated rules:
     * `System.Collections.Generic.ICollection<T>`
     * `System.Collections.Generic.IList<T>`
 
-> Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, `C₁` is a ***better conversion*** than `C₂` if one of the following holds:
+> Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, ***better conversion* is defined as**:
 >
+> **If `E` is a *collection expression* then:**
+> * 
+
+
+> Otherwise `C₁` is a ***better conversion*** than `C₂` if one of the following holds:
+> * *[existing rules ...]*
+
+> * `E` is a *collection expression* and one of the following holds:
+>   * `T₁` is a *span_type* and `T₂` is an *array_or_array_interface_or_string_type*, *or* `T₂` is a *span_type* and `T₁` is an *array_or_array_interface_or_string_type***
+
 > * `E` exactly matches `T₁` and `E` does not exactly match `T₂`
-> * `E` exactly matches both or neither of `T₁` and `T₂`, and `T₁` is a [*better conversion target*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11646-better-conversion-target) than `T₂` **and the following is *not true*:**
->   * **`C₁` and `C₂` are collection expression conversions *and***
+> * **`E` is not a *collection expression* and** `E` exactly matches both or neither of `T₁` and `T₂`, and `T₁` is a [*better conversion target*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11646-better-conversion-target) than `T₂` **and the following is *not true*:**
+>   * **`E` is a *collection expression* *and***
 >   * **`T₁` is a *span_type* and `T₂` is an *array_or_array_interface_or_string_type*, *or* `T₂` is a *span_type* and `T₁` is an *array_or_array_interface_or_string_type***
-> * **`C₁` and `C₂` are collection expression conversions, and `T₁` is a *span_type* with *iteration type* `E₁`, and `T₂` is an *array_or_array_interface_or_string_type* with *iteration type* `E₂`, and `E₁` is implicitly convertible to `E₂`**
+> * **`E` is a *collection expression* and one of the following holds:**
+>   * **`T₁` is a *span_type* with *iteration type* `E₁`, and `T₂` is an *array_or_array_interface_or_string_type* with *iteration type* `E₂`, and `E₁` is implicitly convertible to `E₂`**
+>   * **`E` has an inferred *element type* `E0` and all the following hold:**
+>     * **`T₁` has *iteration type* `E₁`, and `T₂` has *iteration type* `E₂`**
+>     * **an identity conversion exists from `T₁` to `T₂` *before type substitution!***
+>     * **`E0` exactly matches `E₁` and `E0` does not exactly match `E₂`**
 > * ...
+
+> *Note:*
+> The **and the following is not true** rule is to specifically to avoid preferring an array over a span for a collection expression.
 
 Examples of differences with overload resolution between array initializers and collection expressions:
 ```c#
