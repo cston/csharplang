@@ -328,21 +328,24 @@ If the target type is an *array*, a *span*, a type with a *[create method](#crea
 
 See [*safe context constraint*](https://github.com/dotnet/csharpstandard/blob/draft-v7/standard/structs.md#164121-general) for definitions of the *safe-context* values: *declaration-block*, *function-member*, and *caller-context*.
 
-The *safe-context* of a collection expression is:
+The *safe-context* of a collection expression is the *caller-context*.
 
-* The safe-context of an empty collection expression `[]` is the *caller-context*.
+If the target type is a *span type*, the compiler *may* store the collection on the stack rather than the heap if one of the following holds:
+- The collection expression is an argument to a parameter that is implicitly or explicitly *scoped*
+- The collection expression is assigned to a variable that is implicitly or explicitly *scoped*
+- The compiler can otherwise determine the *span* does not escape the enclosing method
 
-* If the target type is a *span type* `System.ReadOnlySpan<T>`, and `T` is one of the *primitive types* `bool`, `sbyte`, `byte`, `short`, `ushort`, `char`, `int`, `uint`, `long`, `ulong`, `float`, or `double`, and the collection expression contains *constant values only*, the safe-context of the collection expression is the *caller-context*.
+If the target type is a *span type* and the collection *may* require heap allocation, the compiler will report a warning if one of the following holds:
+- The collection expression is an argument to a parameter that is *not* implicitly or explicitly *scoped*
+- The collection expression is assigned to a variable that is *not* implicitly or explicitly *scoped*
 
-* If the target type is a *span type* `System.Span<T>` or `System.ReadOnlySpan<T>`, the safe-context of the collection expression is the *declaration-block*.
-
-* If the target type is a *ref struct type* with a [*create method*](#create-methods), the safe-context of the collection expression is the [*safe-context of an invocation*](https://github.com/dotnet/csharpstandard/blob/draft-v7/standard/structs.md#164126-method-and-property-invocation) of the create method where the collection expression is the span argument to the method.
-
-* Otherwise the safe-context of the collection expression is the *caller-context*.
-
-A collection expression with a safe-context of *declaration-block* cannot escape the enclosing scope, and the compiler *may* store the collection on the stack rather than the heap.
-
-To allow a collection expression for a ref struct type to escape the *declaration-block*, it may be necessary to cast the expression to another type.
+> *Note:*
+> The warning for heap allocation is intended to catch potentially unnecessary allocations for *span types*.
+>
+> Possible fixes for the allocation warning for a collection expression as a *span type* and passed as an argument or assigned to a variable are:
+> - Declare the target parameter or variable as `scoped`.
+> - Disable the warning locally.
+> - Cast the collection expression to an array type to make the allocation more explicit.
 
 ```csharp
 static ReadOnlySpan<int> AsSpanConstants()
