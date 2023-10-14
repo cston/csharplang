@@ -330,19 +330,19 @@ See [*safe context constraint*](https://github.com/dotnet/csharpstandard/blob/dr
 
 The *safe-context* of a collection expression is the *caller-context*.
 
-If the target type is a *span type*, the compiler *may* store the collection on the stack rather than the heap if one of the following holds:
+If the target type is a *span type*, the compiler *may* store the collection on the stack rather than the heap in the following cases:
 - The collection expression is an argument to a parameter that is implicitly or explicitly *scoped*
 - The collection expression is assigned to a variable that is implicitly or explicitly *scoped*
 - The compiler can otherwise determine the *span* does not escape the enclosing method
 
-If the target type is a *span type* and the collection *may* require heap allocation, the compiler will report a warning if one of the following holds:
+If the target type is a *span type* and the compiler *may* store the collection on the heap, a warning will be reported in the following cases:
 - The collection expression is an argument to a parameter that is *not* implicitly or explicitly *scoped*
 - The collection expression is assigned to a variable that is *not* implicitly or explicitly *scoped*
 
 > *Note:*
-> The warning for heap allocation is intended to catch potentially unnecessary allocations for *span types*.
+> The intent of the warning is to catch potentially unnecessary allocations for collection expressions targeting *span types*.
 >
-> Possible fixes for the allocation warning for a collection expression as a *span type* and passed as an argument or assigned to a variable are:
+> Possible fixes for the allocation warning are:
 > - Declare the target parameter or variable as `scoped`.
 > - Disable the warning locally.
 > - Cast the collection expression to an array type to make the allocation more explicit.
