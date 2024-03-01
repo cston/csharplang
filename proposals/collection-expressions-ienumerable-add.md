@@ -8,7 +8,7 @@ That is a breaking change from 8.0.100 &mdash; there are a number of legacy coll
 The following are several proposed alternatives to address the breaking change.
 
 ## Background
-Collection types that implement `IEnumerable` or `IEnumerable<T>` and that are populated with an accessible constructor and one or more `Add` methods are sometimes referred to informally as *collection initializer types* because the API used to create collection instances for such types is the API use for *collection initializer expressions*.
+This issue affects certain target types that implement `IEnumerable` and that are populated with `Add` method calls. We sometimes refer to these types informally as *collection initializer types* because the API is also used by *collection initializer expressions*.
 
 The spec requirements for collection expressions that target such types are split between the binding necessary for *conversion* and the binding for *construction*.
 
@@ -55,7 +55,7 @@ The *collection expressions conversion* requirements align with [*params collect
 > - ...
 
 ### Breaking change
-The breaking change affects types such as [`InputGestureCollection`](https://learn.microsoft.com/en-us/dotnet/api/system.windows.input.inputgesturecollection?view=windowsdesktop-8.0) which implement `IEnumerable` but not `IEnumerable<T>` and has a strongly-typed `Add(T)` method rather than `Add(object)`.
+The breaking change affects types which implement `IEnumerable` but not `IEnumerable<T>` and has a strongly-typed `Add(T)` method rather than `Add(object)`. An example is [`System.Windows.Input.InputGestureCollection`](https://learn.microsoft.com/en-us/dotnet/api/system.windows.input.inputgesturecollection?view=windowsdesktop-8.0):
 ```csharp
 public sealed class InputGestureCollection : System.Collections.IList
 {
