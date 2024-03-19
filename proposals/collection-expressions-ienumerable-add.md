@@ -172,7 +172,7 @@ For *collection expression conversions*, the updated requirement:
 >   * The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments, and the constructor is accessible at the location of the collection expression.
 >   * If the collection expression has any elements, the *type* has an instance or extension method `Add` where:
 >     * **The method can be invoked with a single argument and the corresponding parameter is either by value or `in`.**
->     * **If the method is generic, the type arguments can be inferred from the collection and argument.**
+>     * **If the method is generic, the type arguments can be inferred from the arguments.**
 >     * The method is accessible at the location of the collection expression.
 > * ...
 
@@ -186,7 +186,7 @@ For *params collections*, the updated requirement:
 >   - The *type* has a constructor that can be invoked with no arguments, and the constructor is at least as accessible as the declaring member.
 >   - The *type* has an instance (not an extension) method `Add` where:
 >     - **The method can be invoked with a single argument and the corresponding parameter is either by value or `in`.**
->     - **If the method is generic, the type arguments can be inferred from the collection and argument.**
+>     - **If the method is generic, the type arguments can be inferred from the argument.**
 >     - The method is at least as accessible as the declaring member.
 > - ...
 
