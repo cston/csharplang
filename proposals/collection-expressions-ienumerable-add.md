@@ -208,5 +208,4 @@ The affected collections that implement a single strongly-typed indexer matching
 ## Issues
 
 - https://github.com/dotnet/roslyn/issues/72098
-- https://github.com/dotnet/roslyn/issues/71240
 
