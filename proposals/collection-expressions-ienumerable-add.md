@@ -148,6 +148,7 @@ For *collection expression conversions*, the **proposed change**:
 > * If `Eᵢ` is an *spread element* `Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `U`.
 
 The proposed change would resolve the breaking change in 17.10p1 and allow types in category 1 and 2 to be used as collection expression target types.
+Types in category 3 would still *not* be valid target types, unchanged from 17.8.
 
 For *params collections*, there is a corresponding **proposed change**:
 
@@ -179,6 +180,17 @@ For *collection expression conversions*, the **extended proposed change**:
 > * ~~If `Eᵢ` is an *spread element* `Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `U`.~~
 
 The extended proposal would allow types in category 1, 2, and 3 to be used as collection expression target types.
+
+The extended proposal would however have implications that would need to be understood and addressed. For example, the following would now become ambiguous without further changes.
+
+```csharp
+F([1, 2, 3]);
+
+void F(List<int> list) { }
+void F(List<string> list) { }
+```
+
+Absent further work, this would be a breaking change. As this is a scenario we want to keep working, this would need be carefully considered and designed, and we are not proposing making this change in 17.10.
 
 ## Meetings
 
