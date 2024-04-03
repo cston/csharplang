@@ -1,104 +1,39 @@
-# Collection expression target types implementing `IEnumerable` and `Add(T item)`
+# Collection expression target types implementing `IEnumerable` and with strongly-typed `Add`
 
 ## Summary
-The requirements for collection expressions were tightened in Visual Studio 17.10 preview 1 to require target types that implement `IEnumerable` have *an instance or extension `Add` method that can be called with an argument of the *iteration type**.
+The conversion rules for collection expressions were tightened at [LDM-2024-01-10](https://github.com/dotnet/csharplang/blob/main/meetings/2024/LDM-2024-01-10.md#collection-expressions-conversion-vs-construction) to require target types that implement `IEnumerable`, and that do not have create method, to have:
+> An accessible Add instance or extension method that can be invoked with value of iteration type as the argument.
 
-That is a breaking change from Visual Studio 17.8 &mdash; there are a number of collection types that implement `IEnumerable` or `IEnumerable<T>`, and that expose a strongly-typed `Add` method but where the iteration type of the collection cannot be implicitly converted to the `Add` method parameter type. Those types are no longer valid target types for collection expressions.
+That is a breaking change for collection types where the `Add` method has a parameter type that is *implicitly convertible but not identical* to the iteration type. Those types are no longer valid targets for collection expressions. We should relax the recent `Add` method requirement to address the breaking change.
 
-The following are several proposed alternatives to address the breaking change.
+Additionally, there are collection types where there is *no conversion* between the `Add` method parameter type and the iteration type. Those types are valid targets for classic *collection initializers* but have never been valid for *collection expressions*. We should consider supporting those types for collection expressions as well.
 
-## Background
-This issue affects certain target types that implement `IEnumerable` (and optionally `IEnumerable<T>`) and that are populated with `Add` method calls. We sometimes refer to these types informally as *collection initializer types* because the API is also used by *collection initializer expressions*.
+## Examples
+There are several categories of collection types that are supported by classic *collection initializers* that are not supported in *collection expressions*.
 
-The spec requirements for collection expressions that target such types are split between the binding necessary for *conversion* and the binding for *construction*.
+The first two categories were supported before the recent requirement for `Add`, and these two categories represent the breaking change. The last category has not been supported previously with collection expressions but could be considered.
 
-### 17.8
-In 17.8, *conversion* simply requires the target type to implement non-generic `IEnumerable`, and does *not* require an `Add` method:
+**Category 1:** Types that implement `IEnumerable` but not `IEnumerable<T>` and have a strongly-typed `Add(T)`.
 
-> An implicit *collection expression conversion* exists from a collection expression to the following types:
-> * ...
-> * A *struct* or *class type* that implements `System.Collections.IEnumerable`.
-> * ...
-> 
-> The implicit conversion exists if the type has an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) `U` where for each *element* `Eᵢ` in the collection expression:
-> * If `Eᵢ` is an *expression element*, there is an implicit conversion from `Eᵢ` to `U`.
-> * If `Eᵢ` is an *spread element* `Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `U`.
-
-An `Add` method is required for *construction* of the collection instance though, although that requirement is checked after determining *convertibility*, and the requirement is that for each element there is an applicable `Add` method that can be called with that expression:
-
-> * The constructor that is applicable with no arguments is invoked.
-> 
-> * For each element in order:
->   * If the element is an *expression element*, the applicable `Add` instance or extension method is invoked with the element *expression* as the argument. (Unlike classic [*collection initializer behavior*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#117154-collection-initializers), element evaluation and `Add` calls are not necessarily interleaved.)
->   * If the element is a *spread element* then ...
-
-### 17.10p1
-In 17.10p1, [*conversion*]((https://github.com/dotnet/csharplang/blob/main/proposals/csharp-12.0/collection-expressions.md#conversions)) was updated to require the constructor and also to require an `Add` method callable with an argument of the *iteration type*. For *construction*, the requirements were unchanged from 17.8.
-
-The updated *conversion* rule:
-
-> An implicit *collection expression conversion* exists from a collection expression to the following types:
-> * ...
-> * A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
->   * **The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments, and the constructor is accessible at the location of the collection expression.**
->   * **If the collection expression has any elements, the *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* instance or extension method `Add` that can be invoked with a single argument of the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement), and the method is accessible at the location of the collection expression.**
-> * ...
-
-There were two motivations for the additional `Add` method requirement:
-1. Reduce the number of `IEnumerable` implementations that are considered valid target types for collection expressions but which fail to bind successfully. This is important for overload resolution to avoid unnecessary ambiguities.
-2. Align with the *params collections* preview feature which has the additional requirement to allow validating the *params* type at the method declaration rather than only at call sites.
-
-The requirements for *params collections* preview feature:
-
-> The *type* of a parameter collection shall be one of the following valid target types for a collection expression:
-> - ...
-> - A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
->   - The *type* has a constructor that can be invoked with no arguments, and the constructor is at least as accessible as the declaring member.
->   - The *type* has an instance (not an extension) method `Add` that can be invoked with a single argument of
->     the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/draft-v9/standard/statements.md#1395-the-foreach-statement),
->     and the method is at least as accessible as the declaring member.
-> - ...
-
-### Breaking change
-The breaking change has been reported for several collection types: some that implement `IEnumerable` only, and some that also implement `IEnumerable<T>`.
-
-**Example 1:** [`System.Windows.Input.InputGestureCollection`](https://learn.microsoft.com/en-us/dotnet/api/system.windows.input.inputgesturecollection?view=windowsdesktop-8.0) implements `IEnumerable` but not `IEnumerable<T>`, and has an `Add(InputGesture)` but no `Add(object)`.
+Example: [`System.Windows.Input.InputGestureCollection`](https://learn.microsoft.com/en-us/dotnet/api/system.windows.input.inputgesturecollection?view=windowsdesktop-8.0) implements `IEnumerable` but not `IEnumerable<T>`, and has an `Add(InputGesture)` but no `Add(object)`.
 
 ```csharp
 namespace System.Windows.Input
 {
     public sealed class InputGestureCollection : System.Collections.IList
     {
-        public InputGesture this[int index] { get; set; }
-        object IList.this[int index] { get; set; }
-
         public int Add(InputGesture inputGesture);
-        int IList.Add(object inputGesture);
-
         // ...
     }
 }
+
+InputGestureCollection c = [new KeyGesture(default)]; // error: breaking change
 ```
 
-**Example 2:** [`Xunit.TheoryData<T>`](https://xunit.net/) implements `IEnumerable<object[]>`, and has an `Add(T)` but no `Add(object[])`.
+**Category 2:** Types that implement `IEnumerable<T>` and have a strongly-typed `Add(U)` where `U` is implicitly convertible to `T`.
+This is a generic form of category 1.
 
-```csharp
-namespace Xunit
-{
-    public abstract class TheoryData : IEnumerable<object[]>, IEnumerable
-    {
-        public IEnumerator<object[]> GetEnumerator();
-        IEnumerator IEnumerable.GetEnumerator();
-    }
-
-    public class TheoryData<T> : TheoryData
-    {
-        public void Add(T p);
-    }
-}
-```
-
-**Example 3:** [`System.CommandLine.Command`](https://learn.microsoft.com/en-us/dotnet/standard/commandline/) implements `IEnumerable<Symbol>` and has `Add()` methods for derived types of `Symbol` but not for `Symbol`.
+Example: [`System.CommandLine.Command`](https://learn.microsoft.com/en-us/dotnet/api/system.commandline?view=system-commandline) implements `IEnumerable<Symbol>` and has `Add()` methods for derived types of `Symbol` but not for `Symbol`.
 
 ```csharp
 namespace System.CommandLine
@@ -112,93 +47,138 @@ namespace System.CommandLine
     public class Command : Symbol, IEnumerable<Symbol>
     {
         public IEnumerator<Symbol> GetEnumerator();
-        IEnumerator IEnumerable.GetEnumerator();
-
         public void Add(Argument argument);
         public void Add(Option option);
         public void Add(Command command);
+        // ...
     }
+
+    public class RootCommand : Command { /*...*/ }
 }
+
+RootCommand c = [new Argument()]; // error: breaking change
 ```
 
-## Alternatives
-The following are some of the alternatives that have been proposed to address the breaking change.
+**Category 3:** Types that implement `IEnumerable<T>` and have a strongly-typed `Add(U)` where `U` and `T` are unrelated.
 
-### Alternative 1: No changes
-No changes from 17.10p1.
-The affected collection types, such as the examples above, would not be useable for collection expressions or params collections.
+This category is distinctly different from the previous two categories since it has not been supported previously with collection expressions.
 
-### Alternative 2: Remove the `Add` requirement for conversion
-Remove the requirement for an `Add` method that can be called with an argument of the *iteration type*, and revert to the 17.8 requirements.
+Example: [`Xunit.TheoryData<T>`](https://xunit.net/) implements `IEnumerable<object[]>`, and has an `Add(T)` but no `Add(object[])`.
 
-For *collection expression conversions*, the updated requirement:
+```csharp
+namespace Xunit
+{
+    public abstract class TheoryData : IEnumerable<object[]>, IEnumerable
+    {
+        // ...
+    }
+
+    public class TheoryData<T> : TheoryData
+    {
+        public void Add(T p);
+    }
+}
+
+TheoryData<string> d = ["a", "b", "c"]; // error
+```
+
+## Background
+This issue affects target types that implement `IEnumerable` and do not have create methods. The conversion requirements for such types were modified in [LDM-2024-01-10](https://github.com/dotnet/csharplang/blob/main/meetings/2024/LDM-2024-01-10.md#collection-expressions-conversion-vs-construction), and those changes were implemented in 17.10p1.
+
+**In 17.8**, *conversion* simply requires the target type to implement non-generic `IEnumerable`, and does *not* require an `Add` method:
+
+> An implicit *collection expression conversion* exists from a collection expression to the following types:
+> * ...
+> * A *struct* or *class type* that implements `System.Collections.IEnumerable`.
+> 
+> The implicit conversion exists if the type has an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) `U` where for each *element* `Eᵢ` in the collection expression:
+> * If `Eᵢ` is an *expression element*, there is an implicit conversion from `Eᵢ` to `U`.
+> * If `Eᵢ` is an *spread element* `Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `U`.
+
+Even though an `Add` method is not required for *conversion*, an `Add` method is required for *construction* of the collection instance. That requirement is checked after determining *convertibility*, and the requirement is that for each element there is an applicable `Add` method that can be called with that expression:
+
+> * The constructor that is applicable with no arguments is invoked.
+> 
+> * For each element in order:
+>   * If the element is an *expression element*, the applicable `Add` instance or extension method is invoked with the element *expression* as the argument. (Unlike classic [*collection initializer behavior*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#117154-collection-initializers), element evaluation and `Add` calls are not necessarily interleaved.)
+>   * If the element is a *spread element* then ...
+
+**In 17.10p1**, [*conversion*]((https://github.com/dotnet/csharplang/blob/main/proposals/csharp-12.0/collection-expressions.md#conversions)) was updated to require the constructor and also to require an `Add` method callable with an argument of the *iteration type*. For *construction*, the requirements were unchanged from 17.8. The **updated** conversion requirement:
+
 > An implicit *collection expression conversion* exists from a collection expression to the following types:
 > * ...
 > * A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
->   * The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments, and the constructor is accessible at the location of the collection expression.
->   * ~~If the collection expression has any elements, the *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* instance or extension method `Add` that can be invoked with a single argument of the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement), and the method is accessible at the location of the collection expression.~~
-> * ...
+>   * **The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments, and the constructor is accessible at the location of the collection expression.**
+>   * **If the collection expression has any elements, the *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* instance or extension method `Add` that can be invoked with a single argument of the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement), and the method is accessible at the location of the collection expression.**
+> 
+> The implicit conversion exists if the type has an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) `U` where for each *element* `Eᵢ` in the collection expression:
+> * If `Eᵢ` is an *expression element*, there is an implicit conversion from `Eᵢ` to `U`.
+> * If `Eᵢ` is an *spread element* `Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `U`.
 
-For *construction*, no changes &mdash; an applicable `Add` method will be required for each element expression.
+There were two motivations for the additional `Add` method requirement:
+1. Reduce the number of `IEnumerable` implementations that are considered valid target types for collection expressions but which fail to bind successfully. This is important for overload resolution to avoid unnecessary ambiguities.
+2. Align with the *params collections* preview feature which has the additional requirement to allow validating the *params* type at the method declaration rather than only at call sites.
 
-For *params collections*, no changes &mdash; an applicable `Add` method callable with an argument of the *iteration type* will be required.
+**For *params collections***, the requirements for the preview feature are:
 
-The affected collection types would be useable for collection expressions, but not for params collections.
+> The *type* of a parameter collection shall be one of the following valid target types for a collection expression:
+> - ...
+> - A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
+>   - The *type* has a constructor that can be invoked with no arguments, and the constructor is at least as accessible as the declaring member.
+>   - The *type* has an instance (not an extension) method `Add` that can be invoked with a single argument of
+>     the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/draft-v9/standard/statements.md#1395-the-foreach-statement),
+>     and the method is at least as accessible as the declaring member.
 
-### Alternative 3: Remove the `Add` requirement for conversion *for non-generic enumerable implementations only*
-This is a refinement of the previous alternative, but only removing the `Add` method requirement for target types that do not have a generic enumerable implementation.
-The assumption is the breaking change is more likely with *non-generic* collection types such as `InputGestureCollection`.
+## Proposal
+Relax the requirement for *conversion* to require an instance or extension `Add` method that can be invoked with a single argument, but without requirements on the method parameter *type*.
+For *construction*, there are no changes.
 
-For *collection expression conversions*, the updated requirement:
-> An implicit *collection expression conversion* exists from a collection expression to the following types:
-> * ...
-> * A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
->   * The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments, and the constructor is accessible at the location of the collection expression.
->   * If the collection expression has any elements, **and if the *iteration type* is determined from an `IEnumerable<T>` implementation or from a `GetEnumerator` method that returns a type other than `IEnumerable`, then** the *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* instance or extension method `Add` that can be invoked with a single argument of the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement), and the method is accessible at the location of the collection expression.
-> * ...
-
-For *construction* and for *params collections*, no changes.
-
-The affected collection types that implement `IEnumerable` but not `IEnumerable<T>` would be usable in collection expressions but not params collections. The affected types that implement `IEnumerable<T>` would not be usable for either collection expressions or params collections.
-
-### Alternative 4: Require an `Add` method for conversion callable with a single argument
-Relax the requirement for conversion to require an instance or extension `Add` method that can be invoked with a single argument, but without requirements on the method parameter *type*.
-
-For *collection expression conversions*, the updated requirement:
-> An implicit *collection expression conversion* exists from a collection expression to the following types:
+For *collection expression conversions*, the **proposed change**:
 > An implicit *collection expression conversion* exists from a collection expression to the following types:
 > * ...
 > * A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
 >   * The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments, and the constructor is accessible at the location of the collection expression.
 >   * If the collection expression has any elements, the *type* has an instance or extension method `Add` where:
->     * **The method can be invoked with a single argument and the corresponding parameter is either by value or `in`.**
->     * **If the method is generic, the type arguments can be inferred from the arguments.**
+>     * **The method can be invoked with a single argument.**
+>     * **If the method is generic, the type arguments can be inferred from the collection and argument.**
 >     * The method is accessible at the location of the collection expression.
-> * ...
+> 
+> The implicit conversion exists if the type has an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) `U` where for each *element* `Eᵢ` in the collection expression:
+> * If `Eᵢ` is an *expression element*, there is an implicit conversion from `Eᵢ` to `U`.
+> * If `Eᵢ` is an *spread element* `Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `U`.
 
-For *construction*, no changes.
+The proposed change would resolve the breaking change in 17.10p1 and allow types in category 1 and 2 to be used as collection expression target types.
 
-For *params collections*, the updated requirement:
+For *params collections*, there is a corresponding **proposed change**:
 
 > The *type* of a parameter collection shall be one of the following valid target types for a collection expression:
 > - ...
 > - A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
 >   - The *type* has a constructor that can be invoked with no arguments, and the constructor is at least as accessible as the declaring member.
 >   - The *type* has an instance (not an extension) method `Add` where:
->     - **The method can be invoked with a single argument and the corresponding parameter is either by value or `in`.**
+>     - **The method can be invoked with a single argument.**
 >     - **If the method is generic, the type arguments can be inferred from the argument.**
 >     - The method is at least as accessible as the declaring member.
 > - ...
 
-The affected collections would be usable for collection expressions and for params collections.
+### Extended proposal
+We could extend the proposal to remove the requirement that each element in the collection expression is implicitly convertible to the *iteration type* for these types. (We would only remove this requirement for types that implement `IEnumerable` and do not use a create method.)
 
-### Alternative 5: Determine *iteration type* from indexer type
-If the *iteration type* is determined from a *non-generic* enumerable implementation and the type has an indexer, use the indexer type as the *iteration type* instead.
-The assumption is that many of the *legacy non-generic* types affected that expose strongly-typed `Add` methods also expose strongly-typed indexers.
+For *collection expression conversions*, the **extended proposed change**:
+> An implicit *collection expression conversion* exists from a collection expression to the following types:
+> * ...
+> * A *struct* or *class type* that implements `System.Collections.IEnumerable` where:
+>   * The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments, and the constructor is accessible at the location of the collection expression.
+>   * If the collection expression has any elements, the *type* has an instance or extension method `Add` where:
+>     * **The method can be invoked with a single argument.**
+>     * **If the method is generic, the type arguments can be inferred from the collection and argument.**
+>     * The method is accessible at the location of the collection expression.
+> 
+> ~~The implicit conversion exists if the type has an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) `U` where for each *element* `Eᵢ` in the collection expression:~~
+> * ~~If `Eᵢ` is an *expression element*, there is an implicit conversion from `Eᵢ` to `U`.~~
+> * ~~If `Eᵢ` is an *spread element* `Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `U`.~~
 
-No changes are needed for *conversion*, *construction*, or *params collections*, because the requirements are all based on *iteration type*.
-
-The affected collections that implement a single strongly-typed indexer matching the `Add` parameter type would be usable for collection expressions and for params collections.
+The extended proposal would allow types in category 1, 2, and 3 to be used as collection expression target types.
 
 ## Meetings
 
@@ -208,4 +188,4 @@ The affected collections that implement a single strongly-typed indexer matching
 ## Issues
 
 - https://github.com/dotnet/roslyn/issues/72098
-
+- https://github.com/dotnet/roslyn/issues/71240
