@@ -160,7 +160,6 @@ For *params collections*, there is a corresponding **proposed change**:
 >     - **The method can be invoked with a single argument.**
 >     - **If the method is generic, the type arguments can be inferred from the argument.**
 >     - The method is at least as accessible as the declaring member.
-> - ...
 
 ### Extended proposal
 We could extend the proposal to remove the requirement that each element in the collection expression is implicitly convertible to the *iteration type* for these types. (We would only remove this requirement for types that implement `IEnumerable` and do not use a create method.)
@@ -190,7 +189,7 @@ void F(List<int> list) { }
 void F(List<string> list) { }
 ```
 
-Absent further work, this would be a breaking change. As this is a scenario we want to keep working, this would need be carefully considered and designed, and we are not proposing making this change in 17.10.
+Absent further work, this would be a breaking change. As this is a scenario we want to keep working, this would need be carefully considered and designed, and we are *not* proposing making this change in 17.10.
 
 ## Meetings
 
