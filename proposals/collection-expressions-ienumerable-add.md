@@ -6,7 +6,7 @@ The conversion rules for collection expressions were tightened at [LDM-2024-01-1
 
 That is a breaking change for collection types where the `Add` method has a parameter type that is *implicitly convertible but not identical* to the iteration type. Those types are no longer valid targets for collection expressions. We should relax the recent `Add` method requirement to address the breaking change.
 
-Additionally, there are collection types where there is *no conversion* between the `Add` method parameter type and the iteration type. Those types are valid targets for classic *collection initializers* but have never been valid for *collection expressions*. We should consider supporting those types for collection expressions as well.
+Additionally, there are collection types where there is *no conversion* between the `Add` method parameter type and the iteration type. Those types are valid targets for classic *collection initializers* but have never been valid for *collection expressions*. We could consider supporting those types for collection expressions as well.
 
 ## Examples
 There are several categories of collection types that are supported by classic *collection initializers* that are not supported in *collection expressions*.
