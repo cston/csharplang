@@ -183,7 +183,7 @@ The extended proposal would allow types in category 1, 2, and 3 to be used as co
 The extended proposal would however have implications that would need to be understood and addressed. For example, the following would now become ambiguous without further changes.
 
 ```csharp
-F([1, 2, 3]);
+F([1, 2, 3]); // error: ambiguous
 
 void F(List<int> list) { }
 void F(List<string> list) { }
