@@ -195,7 +195,7 @@ A *better element type* is defined as:
 The *natural element type* of the collection expression is the [*best common type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#116315-finding-the-best-common-type-of-a-set-of-expressions) of the elements.
 For each element `Eᵢ` in the collection expression, the type contributed to the *best common type* is the following:
 * If `Eᵢ` is an *expression element*, the contribution is the *type* of `Eᵢ`. If `Eᵢ` does not have a type, there is no contribution.
-* If `Eᵢ` is a *spread element* `..Sᵢ`, the contribution is the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) of `Sᵢ`. If `Sᵢ` does not have an *iteration type*, there is no contribution.
+* If `Eᵢ` is a *spread element* `..Sᵢ`, the contribution is the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) of `Sᵢ`.
 
 If there is no *best common type* of the elements, the collection expression has no natural type.
 
@@ -204,7 +204,7 @@ Proposal B addresses examples 2 and 3; the behavior for example 1 is unchanged.
 ## Open questions
 Should we allow preferring `Span<T>` over `Span<U>` when `T` is a better element type than `U`?
 
-Should we allow preferring `T[]` over `U[]`, or `IEnumerable<T>` over `IEnumerable<U>`, when `T` is a better element type than `U`? We currently only allow that only when there is an implicit reference conversion from `T` to `U`.
+Should we allow preferring `T[]` over `U[]`, or `IEnumerable<T>` over `IEnumerable<U>`, when `T` is a better element type than `U`? We currently only allow that when there is an implicit reference conversion from `T` to `U`.
 
 Should the proposed changes be tied to `-langversion:13` and higher?
 
