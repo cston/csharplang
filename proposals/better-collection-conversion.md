@@ -190,7 +190,8 @@ A *better element type* is defined as:
 
 > Given a *collection expression* `E`, a type `E₁` is a *better element type* than a type `E₂` if one of the following holds:
 > - `E` has a *natural element type* `Tₑ` and an identity conversion exists from `Tₑ` to `E₁` and no identity conversion exists from `Tₑ` to `E₂`
-> - `E` has no *natural element type* or `E` has a *natural element type* `Tₑ` and no identity conversion exists from `Tₑ` to `E₁` or `E₂`, and an implicit conversion exists from `E₁` to `E₂`
+> - `E` has a *natural element type* `Tₑ` and no identity conversion exists from `Tₑ` to `E₁` or from `Tₑ` to `E₂`, and an implicit conversion exists from `E₁` to `E₂`
+> - `E` has no *natural element type*, and an implicit conversion exists from `E₁` to `E₂`
 
 The *natural element type* of the collection expression is the [*best common type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#116315-finding-the-best-common-type-of-a-set-of-expressions) of the elements.
 For each element `Eᵢ` in the collection expression, the type contributed to the *best common type* is the following:
