@@ -202,6 +202,27 @@ If there is no *best common type* of the elements, the collection expression has
 
 Proposal B addresses examples 2 and 3; the behavior for example 1 is unchanged.
 
+#### Proposal C: better conversion from element
+
+> Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, `C₁` is a *better conversion* than `C₂` if one of the following holds:
+>
+> - `E` is a *collection expression* and `T₁` has *element type* `S₁` and `T₂` has *element type* `S₂`, and `T₁` is *no worse a collection type* than `T₂`, and the following holds:
+>   - For each element `Eᵢ` in `E`:
+>     - If `Eᵢ` is an expression element, the conversion from `Eᵢ` to `S₂` is not better than the conversion from `Eᵢ` to `S₁`
+>     - If `Eᵢ` is a spread element with iteration type `Sᵢ`, the conversion from `Sᵢ` to `S₂` is not better than the conversion from `Sᵢ` to `S₁`
+>   - For at least one element `Eᵢ` in `E`:
+>     - If `Eᵢ` is an expression element, the conversion from `Eᵢ` to `S₁` is better than the conversion from `Eᵢ` to `S₂`
+>     - If `Eᵢ` is a spread element with iteration type `Sᵢ`, the conversion from `Sᵢ` to `S₁` is better than the conversion from `Sᵢ` to `S₂`
+> - `E` is not a *collection expression* and one of the following holds:
+>   - ...
+
+> `T₁` is a *no worse a collection type* than `T₂` if one of the following holds:
+> - `T₁` is a type `S<A1, ..., An>`, and `T₂` is type `S<B1, ..., Bn>`
+> - `T₁` is `System.ReadOnlySpan<E₁>`, and `T₂` is `System.Span<E₂>`
+> - `T₁` is `System.ReadOnlySpan<E₁>` or `System.Span<E₁>` or `E₁[]`, and `T₂` is an *array_or_array_interface*
+> - `T₁` is not a *span_type*, and `T₂` is not a *span_type*, and an implicit conversion exists from `T₁` to `T₂`
+
+
 ## Open questions
 Should we allow preferring `Span<T>` over `Span<U>` when `T` is a better element type than `U`?
 
