@@ -202,7 +202,7 @@ If there is no *best common type* of the elements, the collection expression has
 
 Proposal B addresses examples 2 and 3; the behavior for example 1 is unchanged.
 
-#### Proposal C: better conversion from element
+### Proposal C: better conversion from element
 
 > Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, `C₁` is a *better conversion* than `C₂` if one of the following holds:
 >
