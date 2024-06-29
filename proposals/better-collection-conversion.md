@@ -41,7 +41,7 @@ static void F2(int[] args) { }
 
 ### Better conversion from expression
 
-[*Better conversion from expression*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md#overload-resolution) is currently defined as follows. This includes the changes for [*first-class spans*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md).
+[*Better conversion from expression*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md#overload-resolution) is currently defined as follows:
 
 > Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, `C₁` is a *better conversion* than `C₂` if one of the following holds:
 >
@@ -58,10 +58,12 @@ static void F2(int[] args) { }
 >     and `T₁` is a better conversion target than `T₂`
 > - `E` is a method group, `T₁` is compatible with the single best method from the method group for conversion `C₁`, and `T₂` is not compatible with the single best method from the method group for conversion `C₂`
 
-The current rules have the following limitations:
+The current rules have several issues:
 1. There is no preference for `ReadOnlySpan<E₁>` over `ReadOnlySpan<E₂>`, or `Span<E₁>` over `Span<E₂>`.
-1. The preference for `E₁[]` over `E₂[]`, and `IEnumerable<E₁>` over `IEnumerable<E₂>` etc., only apply when there is an implicit conversion from `E₁` to `E₂`.
-1. The *first-class span* changes only apply when `E` is not a *collection expression*.
+1. The preference for `E₁[]` over `E₂[]`, and `IEnumerable<E₁>` over `IEnumerable<E₂>` etc., only apply when there is an implicit conversion from `T₁` to `T₂`.
+1. The preference for `ReadOnlySpan<E₁>` over `Span<E₂>`, and for `ReadOnlySpan<E₁>` or `Span<E₁>` over `E₂[]` or an array interface with element  type `E₂` applies for any implicit conversion from `E₁` to `E₂`. In particular, this includes *implicit numeric conversions* which seems questionable.
+1. The [*first-class span*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md) changes only apply when `E` is not a *collection expression*.
+1. There are inconsistencies with the betterness rules for `params`.
 
 ### Comparison without collection expressions
 
