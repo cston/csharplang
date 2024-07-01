@@ -59,11 +59,44 @@ static void F2(int[] args) { }
 > - `E` is a method group, `T₁` is compatible with the single best method from the method group for conversion `C₁`, and `T₂` is not compatible with the single best method from the method group for conversion `C₂`
 
 The current rules have several issues:
-1. There is no preference for `ReadOnlySpan<E₁>` over `ReadOnlySpan<E₂>`, or `Span<E₁>` over `Span<E₂>`.
-1. The preference for `E₁[]` over `E₂[]`, and `IEnumerable<E₁>` over `IEnumerable<E₂>` etc., only apply when there is an implicit conversion from `T₁` to `T₂`.
-1. The preference for `ReadOnlySpan<E₁>` over `Span<E₂>`, and for `ReadOnlySpan<E₁>` or `Span<E₁>` over `E₂[]` or an array interface with element  type `E₂` applies for any implicit conversion from `E₁` to `E₂`. In particular, this includes *implicit numeric conversions* which seems questionable.
-1. The [*first-class span*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md) changes only apply when `E` is not a *collection expression*.
-1. There are inconsistencies with the betterness rules for `params`.
+1. There is no preference for `ReadOnlySpan<E₁>` over `ReadOnlySpan<E₂>`.
+1. The preference for `ReadOnlySpan<E₁>` over `Span<E₂>`, and for `ReadOnlySpan<E₁>` or `Span<E₁>` over array or array interface with element  type `E₂` applies for any implicit conversion from `E₁` to `E₂`. This includes *implicit numeric conversions* which seems questionable. But it's also questionable to apply this for any conversion other than identity.
+1. Spans are preferred over any array interface, including mutable interfaces.
+
+There are secondary issues as well, that might limit future changes:
+1. The [*first-class span*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md) changes
+ only apply when `E` is not a *collection expression*.
+1. Inconsistencies with the betterness rules for `params`.
+
+### Proposal 1
+
+We need an additional rule to allow `ReadOnlySpan<T>` over `ReadOnlySpan<U>`. That could be limited to implicit reference conversions, but perhaps it should include other implicit conversions.
+
+And the rules for C#12 could be simplified. Perhaps as simple as: prefer `ReadOnlySpan<T>` over `Span<T>`; prefer `{ReadOnly}Span<T>` over `T[]` or `IEnumerable<T>`.
+
+> Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, `C₁` is a *better conversion* than `C₂` if one of the following holds:
+>
+> - `E` is a *collection expression* and one of the following holds:
+>   - `T₁` is `System.ReadOnlySpan<E₁>`, and `T₂` is `System.ReadOnlySpan<E₂>`, and an *implicit reference, boxing, or nullable* conversion exists from `E₁` to `E₂`.
+>   - `T₁` is `System.ReadOnlySpan<E>`, and `T₂` is `System.Span<E>`.
+>   - `T₁` is `System.ReadOnlySpan<E>` or `System.Span<E>`, and `T₂` is an *array_or_array_interface* with *element type* `E`.
+>   - `T₁` is not a *span_type*, and `T₂` is not a *span_type*, and an implicit conversion exists from `T₁` to `T₂`.
+> - `E` is not a *collection expression* and one of the following holds:
+>   - ...
+
+The simplified rules above are a breaking change. Specifically, we would not prefer `ReadOnlySpan<T>` over `Span<U>` or `{ReadOnly}Span<T>` over array or array interface of `U` when `T` is distinct from `U`.
+
+### Proposal 2
+
+A broader proposal is to align with the behavior for `params` overloads for calls in *expanded form*. Specifically, rely on *better conversion from expression* for the elements within the collection expression, for some set of collection types.
+
+Essentially, the rules would be the following, where we would need to define the set of types where one type is *no worse a collection type* than the other.
+
+> - `E` is a *collection expression* and `T₁` has *element type* `S₁` and `T₂` has *element type* `S₂`, and **`T₁` is *no worse a collection type* than `T₂`**, and the following holds:
+>   - For each element `Eᵢ` in `E`, the conversion from `Eᵢ` to `S₂` *is not better* than the conversion from `Eᵢ` to `S₁`
+>   - For at least one element `Eᵢ` in `E`, the conversion from `Eᵢ` to `S₁` *is better* than the conversion from `Eᵢ` to `S₂`
+
+The rules above are a breaking change, but perhaps only in corner cases such as when the conversion between element types is an *implicit numeric conversion* for instance.
 
 ### Comparison without collection expressions
 
