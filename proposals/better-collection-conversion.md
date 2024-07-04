@@ -2,9 +2,9 @@
 
 ## Summary
 
-There are overload resolution cases with collection expressions that fail with candidates that differ by collection element type when there is an obvious better candidate, and where similar overload resolution cases that use single values, tuples, `params`, or *first-class spans* might succeed.
+The current overload resolution rules for collection expressions treat candidates that differ by collection *element type* as ambiguous unless there is a variance conversion from one of the collection types to the other. And the variance conversions *do not* include conversions from `ReadOnlySpan<T>` to `ReadOnlySpan<U>` provided by the *first-class spans* feature.
 
-Example 1: `string.Concat()` with `ReadOnlySpan<string>` and `ReadOnlySpan<object>` overloads added in .NET 9 (see https://github.com/dotnet/roslyn/issues/73857, [sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUBUQAT7EDsFA3hdW7cQGy0As1AstBgAKAJSt2LcuxnUA9HOoBTZMgD2yENQhhgUAOao1qAM4cADADoAwmpgBjCAmEAlJRAwB5GABsAngDKAA4QMAA8asAAVkr2CAD8AHyicBY2do7Obh7e/sGhYXTmSeLSsmy2Dk7CANoARBB1qXXATdR19nUAuqIA3BJsAL4UAxzc+HyVma7uXr6BIeGRMXFJ2sj6JqLUTNTDZWx045MZ1dlzeYuFxMWJ65vbu/uDQA=)).
+For example, using the `string.Concat()` with `ReadOnlySpan<string>` and `ReadOnlySpan<object>` overloads added in .NET 9 (see https://github.com/dotnet/roslyn/issues/73857, [sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUBUQAT7EDsFA3hdW7cQGy0As1AstBgAKAJSt2LcuxnUA9HOoBTZMgD2yENQhhgUAOao1qAM4cADADoAwmpgBjCAmEAlJRAwB5GABsAngDKAA4QMAA8asAAVkr2CAD8AHyicBY2do7Obh7e/sGhYXTmSeLSsmy2Dk7CANoARBB1qXXATdR19nUAuqIA3BJsAL4UAxzc+HyVma7uXr6BIeGRMXFJ2sj6JqLUTNTDZWx045MZ1dlzeYuFxMWJ65vbu/uDQA=)):
 
 ```csharp
 // error: ambiguous string.Concat(ReadOnlySpan<object?>), string.Concat(ReadOnlySpan<string?>)
@@ -13,6 +13,31 @@ string.Concat(["a", "b", "c"]);
 static void Concat(ReadOnlySpan<object?> args) { }
 static void Concat(ReadOnlySpan<string?> args) { }
 ```
+
+The example above is an important scenario for .NET 9 that should be supported by overload resolution for collection expressions in C#13. And we should consider generalizing support to collection types other than `ReadOnlySpan<T>`, and without requiring a variance conversion between the element types.
+
+## Background
+
+[*Better conversion from expression*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md#overload-resolution) is currently defined as follows:
+
+> Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, `C₁` is a *better conversion* than `C₂` if one of the following holds:
+>
+> - `E` is a *collection expression* and one of the following holds:
+>   - `T₁` is `System.ReadOnlySpan<E₁>`, and `T₂` is `System.Span<E₂>`, and an implicit conversion exists from `E₁` to `E₂`.
+>   - `T₁` is `System.ReadOnlySpan<E₁>` or `System.Span<E₁>`, and `T₂` is an *array_or_array_interface* with *element type* `E₂`, and an implicit conversion exists from `E₁` to `E₂`.
+>   - `T₁` is not a *span_type*, and `T₂` is not a *span_type*, and an implicit conversion exists from `T₁` to `T₂`.
+> - `E` is not a *collection expression* and one of the following holds:
+>   - `E` exactly matches `T₁` and `E` does not exactly match `T₂`
+>   - `E` exactly matches neither of `T₁` and `T₂`,
+>     and `C₁` is an implicit span conversion and `C₂` is not an implicit span conversion
+>   - `E` exactly matches both or neither of `T₁` and `T₂`,
+>     both or neither of `C₁` and `C₂` are an implicit span conversion,
+>     and `T₁` is a better conversion target than `T₂`
+> - `E` is a method group, `T₁` is compatible with the single best method from the method group for conversion `C₁`, and `T₂` is not compatible with the single best method from the method group for conversion `C₂`
+
+To summarize the rules above, when the argument is a *collection expression*, the rules prefer `ReadOnlySpan<E₁>` over `Span<E₂>`, and prefer `ReadOnlySpan<E₁>` *or* `Span<E₁>` over `E₂[]` *or* an interface implemented by `E₂[]`, if there is an implicit conversion from `E₁` to `E₂`. And when the two collection types `T₁` and `T₂` are not spans, the rules prefer `T₁` over `T₂` if there is an implicit conversion from `T₁` to `T₂`.
+
+## Extra (to be removed?)
 
 Example 2: `IEnumerable<string>` and `IEnumerable<IFormattable>` with interpolated strings (see https://github.com/dotnet/csharplang/issues/7651, [sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUPgAwAE+xALANwUVF3EDsFA3hTQI4A2OgxoBZaDAAUASn6C+5QSpoB6NTQCmyZAHtkIGhDDAoAc1R7UAZwkBPcVoQALPRmn0AzAB56VAD5ZOAcnV3dPYl8ASQAxA0gEBAhgABstIIVVUOc3DwBtABIAIj0YLWKQkoQAdz1igF1ZFmVBAF9WVoF6EXwxcUdciO8/YkCaAH1ZGh4aDq7hURzwjxG4hIgklPSAyenZ+bagA=)).
 
@@ -41,22 +66,6 @@ static void F2(int[] args) { }
 
 ### Better conversion from expression
 
-[*Better conversion from expression*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md#overload-resolution) is currently defined as follows:
-
-> Given an implicit conversion `C₁` that converts from an expression `E` to a type `T₁`, and an implicit conversion `C₂` that converts from an expression `E` to a type `T₂`, `C₁` is a *better conversion* than `C₂` if one of the following holds:
->
-> - `E` is a *collection expression* and one of the following holds:
->   - `T₁` is `System.ReadOnlySpan<E₁>`, and `T₂` is `System.Span<E₂>`, and an implicit conversion exists from `E₁` to `E₂`.
->   - `T₁` is `System.ReadOnlySpan<E₁>` or `System.Span<E₁>`, and `T₂` is an *array_or_array_interface* with *element type* `E₂`, and an implicit conversion exists from `E₁` to `E₂`.
->   - `T₁` is not a *span_type*, and `T₂` is not a *span_type*, and an implicit conversion exists from `T₁` to `T₂`.
-> - `E` is not a *collection expression* and one of the following holds:
->   - `E` exactly matches `T₁` and `E` does not exactly match `T₂`
->   - `E` exactly matches neither of `T₁` and `T₂`,
->     and `C₁` is an implicit span conversion and `C₂` is not an implicit span conversion
->   - `E` exactly matches both or neither of `T₁` and `T₂`,
->     both or neither of `C₁` and `C₂` are an implicit span conversion,
->     and `T₁` is a better conversion target than `T₂`
-> - `E` is a method group, `T₁` is compatible with the single best method from the method group for conversion `C₁`, and `T₂` is not compatible with the single best method from the method group for conversion `C₂`
 
 The current rules have several issues:
 1. There is no preference for `ReadOnlySpan<E₁>` over `ReadOnlySpan<E₂>`.
