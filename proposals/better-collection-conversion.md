@@ -63,7 +63,13 @@ static void F3(params ReadOnlySpan<int> args) { }
 static void F3(params byte[] args) { }
 ```
 
-The second change, disallowing numeric conversions between element types in the existing rules, is a breaking change. But the break only affects pairs of overloads where the containing collection types are distinct and a combination of `ReadOnlySpan<>` and `Span<>`, or a span type and an array or array interface, and where the element types are distinct numeric types. *Are there any such cases in the BCL?*
+The second change, disallowing numeric conversions between element types in the existing rules, is a breaking change. But the break only affects pairs of overloads where the containing collection types are distinct and a combination of `ReadOnlySpan<>` and `Span<>`, or a span type and an array or array interface, and where the element types are distinct numeric types.
+
+Workarounds for the breaking change:
+- Explicit casting the collection expression argument
+- Add `[OverloadResolutionPriority]` to the preferred method
+
+*Are there any APIs in the BCL affected by the numeric conversion break?*
 
 ## Alternatives
 
