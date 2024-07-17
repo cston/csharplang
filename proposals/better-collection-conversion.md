@@ -4,16 +4,18 @@
 
 .NET 9 includes overloads for existing methods with parameters that diff by `ReadOnlySpan<string>` and `ReadOnlySpan<object>` only. However, the betterness rules for *collection expressions* do not currently prefer one of those types over the other, so calls to such methods with collection expressions of strings are ambiguous. (The cases are ambiguous even with the [*first-class spans*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md) feature.) See [dotnet/roslyn/issues/73857](https://github.com/dotnet/roslyn/issues/73857).
 
-[sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUBQMoLKwDmAdAMID2MAxhAgBQDaAIggC4AAgHAR4jgIC6ASgDcFCkVE06MehQDeFUQdH4AzEeIA2IwBZRbTtx4AlAKYQMAeRgAbAJ5UADhAwADyswABWzhwIAPwAfKIAbhBeqM4AzvKiOqIAvvqGJmaW+DZ2XLwubp6+AUHB+MQADPFJKWmZ2XkUuUA==)
+[sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAExAagD4AEBMBGAsAKAIGUAXAJ1gHMA6AYQHsYBjCEgCgG0AiCLuAAi7A+gplwC6ASgDc/APRz+EMMCiUArvXUBnEPwbNWbAEoBTCAgDyMADYBPIgAcIMADz1gAK1NMSAfgA+SQEDFnYzC2t7JxdXdGwABkDJAgIsflIKGEoCAG8CfkL+dABmYuwANmKAFn1GMJNzK1sHZzcPb19A/gA3CBt1U21Jflz+AF95RWoAOQBRABV+AE4CotLyqvRa0KMI5ui2uMTuvoGhkbHJhX5ZxZW1wo34rZ36ow6ffw5xXv7B4ajCaPYplF41OqGdjxJI/P7nQFXEE3aiogjjIA)
 
 ```csharp
-string.Concat(["a", "b", "c"]); // error: call is ambiguous
+String.Concat(["a", "b", "c"]); // ambiguous: Concat(ROS<object?>), Concat(ROS<string?>)
 
-public sealed class String
+class String
 {
+    public static void Concat(ReadOnlySpan<object?> values) { } // .NET 9
+    public static void Concat(ReadOnlySpan<string?> values) { } // .NET 9
+    public static void Concat(object?[] values) { }
+    public static void Concat(string?[] values) { }
     // ...
-    public static void Concat(ReadOnlySpan<object?> values) { }
-    public static void Concat(ReadOnlySpan<string?> values) { }
 }
 ```
 
@@ -75,7 +77,7 @@ To work around the breaking change, cast the collection expression argument, or 
 
 ### No change; rely on `OverloadResolutionPriorityAttribute`
 
-No additional rule for `ReadOnlySpan<T>`. Instead, require APIs to apply `[OverloadResolutionPriority]` to allow overload resolution to choose the preferred overload.
+No additional rule for `ReadOnlySpan<T>`. Instead, require APIs to add `[OverloadResolutionPriority]` to indicate the preferred overload.
 
 ### Avoid breaking change, at least for now
 
