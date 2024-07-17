@@ -2,7 +2,9 @@
 
 ## Summary
 
-.NET 9 includes overloads for existing methods with parameters that diff by `ReadOnlySpan<string>` and `ReadOnlySpan<object>` only. However, the betterness rules for *collection expressions* do not currently prefer one of those types over the other, so calls to such methods with collection expressions of strings are ambiguous. (The cases are ambiguous even with the [*first-class spans*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md) feature.) See [dotnet/roslyn/issues/73857](https://github.com/dotnet/roslyn/issues/73857), [sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUBQMoLKwDmAdAMID2MAxhAgBQDaAIggC4AAgHAR4jgIC6ASgDcFCkVE06MehQDeFUQdH4AzEeIA2IwBZRbTtx4AlAKYQMAeRgAbAJ5UADhAwADyswABWzhwIAPwAfKIAbhBeqM4AzvKiOqIAvvqGJmaW+DZ2XLwubp6+AUHB+MQADPFJKWmZ2XkUuUA==).
+.NET 9 includes overloads for existing methods with parameters that diff by `ReadOnlySpan<string>` and `ReadOnlySpan<object>` only. However, the betterness rules for *collection expressions* do not currently prefer one of those types over the other, so calls to such methods with collection expressions of strings are ambiguous. (The cases are ambiguous even with the [*first-class spans*](https://github.com/dotnet/csharplang/blob/main/proposals/first-class-span-types.md) feature.) See [dotnet/roslyn/issues/73857](https://github.com/dotnet/roslyn/issues/73857).
+
+[sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUBQMoLKwDmAdAMID2MAxhAgBQDaAIggC4AAgHAR4jgIC6ASgDcFCkVE06MehQDeFUQdH4AzEeIA2IwBZRbTtx4AlAKYQMAeRgAbAJ5UADhAwADyswABWzhwIAPwAfKIAbhBeqM4AzvKiOqIAvvqGJmaW+DZ2XLwubp6+AUHB+MQADPFJKWmZ2XkUuUA==)
 
 ```csharp
 string.Concat(["a", "b", "c"]); // error: call is ambiguous
@@ -107,7 +109,9 @@ static void F1(params ReadOnlySpan<int> args) { }
 ...
 ```
 
-The same is true for overloads where there is no relationship between the element types (see https://github.com/dotnet/csharplang/issues/7651, [sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUPgAwAE+xALANwUVF3EDsFA3hTQI4A2OgxoBZaDAAUASn6C+5QSokBPcQFMEACwD2GaQG0AJACI9MTWbg1zCAO56zAXVlMaAek81NyZHrIIDQQYMBQAOaoeqgAzgqq6lq6BtLmlta29k5m7oLeSdr6hgAOEMihsRwAzAA89FQAfPLKggC+rK0C9CL4YuIaRallFWBV9HUNjTQA+rI0PDQdXcKihSml5ZU1tQCSAGKBkAgIEMAANprTcwtLFG1AA==)):
+The same is true for overloads where there is no relationship between the element types. See https://github.com/dotnet/csharplang/issues/7651.
+
+[sharplab.io](https://sharplab.io/#v2:EYLgtghglgdgNAFxAJwK7wCYgNQB8ACATAIwCwAUPgAwAE+xALANwUVF3EDsFA3hTQI4A2OgxoBZaDAAUASn6C+5QSokBPcQFMEACwD2GaQG0AJACI9MTWbg1zCAO56zAXVlMaAek81NyZHrIIDQQYMBQAOaoeqgAzgqq6lq6BtLmlta29k5m7oLeSdr6hgAOEMihsRwAzAA89FQAfPLKggC+rK0C9CL4YuIaRallFWBV9HUNjTQA+rI0PDQdXcKihSml5ZU1tQCSAGKBkAgIEMAANprTcwtLFG1AA==)
 
 ```csharp
 MyMethod([$"one", $"two"]); // error: ambiguous
