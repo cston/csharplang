@@ -73,6 +73,10 @@ To work around the breaking change, cast the collection expression argument, or 
 
 ## Alternatives
 
+### No change; rely on `OverloadResolutionPriorityAttribute`
+
+No additional rule for `ReadOnlySpan<T>`. Instead, require APIs to apply `[OverloadResolutionPriority]` to allow overload resolution to choose the preferred overload.
+
 ### Avoid breaking change, at least for now
 
 We could skip the second part of the proposal, disallowing numeric conversions in existing rules. That would avoid the breaking change. 
