@@ -11,40 +11,30 @@ Inline collection expressions could be used with spreads to allow adding element
 int[] items = [x, y, .. b ? [z] : []];
 ```
 
-Inline collection expressions could be used directly in `foreach`:
+Inline collection expressions could be used directly in `foreach`, either with an explicitly-typed iteration variable or an implicitly-typed variable.
 ```csharp
-foreach (bool b in [false, true]) { }
+foreach (bool? b in [false, true, null]) { }
+
+foreach (var i in [1, 2, 3]) { } // int i
 ```
-In these cases, the *collection type* of the inline collection expression is unspecified. The choice of how and whether to instantiate the collection is left to the compiler.
 
-## Compile time *collection_type*
-A *collection_type* is introduced that represents an enumerable type with a specific element type and an *unspecified* containing collection type.
+In these cases, the *collection type* of the inline collection expression is unspecified and not directly observable. The choice of how and whether to instantiate the collection is left to the compiler.
 
-A *collection_type* with element type `E` is referred to here as *`col<E>`*.
+## Natural type
 
-A *collection_type* exists at compile time only &mdash; a *collection_type* cannot be referenced in source or metadata.
+The *type* of a collection expression is `System.ReadOnlySpan<E>` where `E` is the [*best common type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#116315-finding-the-best-common-type-of-a-set-of-expressions) of the elements `Eᵢ`:
+* If `Eᵢ` is an *expression element*, the contribution is the *type* of `Eᵢ`. If `Eᵢ` does not have a type, there is no contribution.
+* If `Eᵢ` is a *spread element* `..Sᵢ`, the contribution is the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) of `Sᵢ`. If `Sᵢ` does not have an *iteration type*, there is no contribution.
 
-The [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) of a *collection_type* `col<E>` is `E`.
+If there is no *best common type* of the elements, the collection expression has no type.
 
-A *collection_type* may be used as a target type or as a natural type for collection expressions.
+## Supported expressions and contexts
 
-## Target types
+*Describe the expressions where nested collection expressions are supported, and the contexts where the collection can be realized.*
 
-A *collection_type* can be used as a target type for collection expressions in spreads and `foreach`. For these scenarios, it is the target *iteration type* that is important; the target collection type is not observable.
+## Realization
 
-### Conversions
-[target-type-conversions]: #target-type-conversions
-
-To enable a *collection_type* as a target type, a [*collection expression conversion*](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-12.0/collection-expressions.md#conversions) is defined for *collection_type*:
-
-> An implicit *collection expression conversion* exists from a collection expression to the following types:
-> * **A *collection_type* `col<T>`**
-> * A single dimensional *array type* `T[]`
-> * ...
-> 
-> The implicit conversion exists if the type has an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) `Tₑ` where for each *element* `Eᵢ` in the collection expression:
-> * If `Eᵢ` is an *expression element*, there is an implicit conversion from `Eᵢ` to `Tₑ`.
-> * If `Eᵢ` is a *spread element* `..Sᵢ`, there is an implicit conversion from the *iteration type* of `Sᵢ` to `Tₑ`.
+If the type of a collection expression is not observable, the compiler is free to emit code that uses another representation for the collection, including eliding the collection instance altogether. For each element, the compiler will emit a conversion to the *best common type*.
 
 ### Spreads
 [target-type-spreads]: #target-type-spreads
@@ -67,32 +57,6 @@ If the target type is used, an error is reported if the collection is not implic
 For a collection expression in a `foreach` collection, the compiler may use any conforming representation for the collection instance, including eliding the collection instance.
 
 The elements of a collection expression in a `foreach` are evaluated in order, and the loop body is executed for each element in order. The compiler *may* evaluate subsequent elements before executing the loop body for preceding elements.
-
-## Natural type
-
-A *collection_type* can be used as a natural type for collection expressions in scenarios where only the *iteration type* of the collection expression is used, and where the containing collection is not observable.
-
-The *natural type* of a collection expression is the *collection_type* `col<E>` where `E` is the [*best common type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#116315-finding-the-best-common-type-of-a-set-of-expressions) of the elements.
-For each element `Eᵢ` in the collection expression, the type contributed to the *best common type* is the following:
-* If `Eᵢ` is an *expression element*, the contribution is the *type* of `Eᵢ`. If `Eᵢ` does not have a type, there is no contribution.
-* If `Eᵢ` is a *spread element* `..Sᵢ`, the contribution is the [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) of `Sᵢ`. If `Sᵢ` does not have an *iteration type*, there is no contribution.
-
-If there is no *best common type* of the elements, the collection expression has no natural type.
-
-Natural type is not a replacement for target type &mdash; there are scenarios supported by target type but not natural type. That said, we could choose to support either target type or natural type, or both.
-```csharp
-// conditional expression:
-// - target type col<byte>: ok
-// - natural type col<int>: error: cannot convert int to byte
-byte[] a = [1, 2, .. b ? [3] : []];
-```
-
-### Conversions
-[natural-type-conversions]: #natural-type-conversions
-
-To allow *collection_types* to be used in *best common type* &mdash; for example  `b ? [x] : [y]` &mdash; a conversion is defined between *collection_types*:
-
-> An implicit *collection_type conversion* exists from the *collection_type* `col<T>` to the *collection_type* `col<U>` if there is an implicit conversion from `T` to `U`.
 
 ### Foreach
 [natural-type-foreach]: #natural-type-foreach
