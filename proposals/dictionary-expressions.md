@@ -184,10 +184,7 @@ Dictionary<string, int> caseInsensitiveMap = [comparer : StringComparer.CaseInse
 An implicit *collection expression conversion* exists from a *collection expression* to the following *dictionary types*:
 * A *dictionary type* with an appropriate *[create method](#create-methods)*.
 
-* A *struct* or *class* *dictionary type* that implements `System.Collections.IEnumerable` where:
-  * The *element type* is determined from a `GetEnumerator` instance method or enumerable interface.
-  * The *type* has an *[applicable](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/expressions.md#11642-applicable-function-member)* constructor that can be invoked with no arguments (*or* a constructor with a single [*comparer*](#Comparer-support) parameter), and the constructor is accessible at the location of the collection expression.
-  * The *indexer* has a `set` accessor that is as accessible as the declaring type.
+* The *dictionary type* `System.Collections.Generic.Dictionary<TKey, TValue>`.
 
 * An *interface type*:
   * `System.Collections.Generic.IDictionary<TKey, TValue>`
@@ -234,9 +231,16 @@ The elements of a collection expression are evaluated in order, left to right. E
 
 If the target is a *dictionary type*, and collection expression's first element is an `expression_element`, and the type of that element is some [*comparer*](#Comparer-support), then:
 
-- If using a constructor to instantiate the value, the constructor must take a single parameter whose type is some [*comparer*](#Comparer-support) type.  The first `element_expression` value will be passed to this parameter.
 - If using a *[create method](#create-methods)*, the method's first parameter's type is some [*comparer*](#Comparer-support) type. The first `element_expression` value will be passed to this parameter.
 - If creating an interface, this [*comparer*](#Comparer-support) must be some `IEqualityComparer<TKey>` type. That comparer will be used to control the behavior of the final type (synthesized or otherwise).  This means that instantiating interfaces only supports hashing semantics, not ordered semantics.
+
+If the target is a *dictionary type* then:
+
+- For each element `Eᵢ` in order:
+  - If `Eᵢ` is a *key value pair element* `Kᵢ:Vᵢ`, first `Kᵢ` is evaluated, then `Vᵢ` is evaluated, and the key value pair `Kᵢ`, `Vᵢ` is added to the collection.
+  - If `Eᵢ` is an *expression element* of type `KeyValuePair<Kᵢ:Vᵢ>`, then `Eᵢ` is evaluated, and the key value pair of the *converted values* of `.Key` and `.Value` is added to the collection.
+  - If `Eᵢ` is an *spread element* `..Sᵢ` where `Sᵢ` has an [*iteration type*](https://github.com/dotnet/csharpstandard/blob/standard-v6/standard/statements.md#1295-the-foreach-statement) `KeyValuePair<Kᵢ, Vᵢ>`, then `Sᵢ` is evaluated and an applicable `GetEnumerator` instance or extension method is invoked on the value of `Sᵢ`, and for each item `Sₑ` from the enumerator, the key value pair of the *converted values* of `.Key` and `.Value` is added to the collection. If the enumerator implements `IDisposable`, then `Dispose` will be called after enumeration, regardless of exceptions.
+- The elements are added ... *using what mechanism?*
 
 For each element `Eᵢ` in order:
 - If the target is a *dictionary type* then:
