@@ -1,11 +1,29 @@
-# Ref struct overloads in Expression trees
+# Ignore overloads with ref struct parameters within Expression lambdas
 
 C#13 adds support for *`params` span*, and C# preview adds *first-class span types*.
 Both of those features allow overload resolution to prefer overloads with *span type* parameters in more cases than previous language versions.
 
-However, in `Expression` trees, choosing an overload that requires a `ref struct` instance may result in errors at compile time or runtime, and is a breaking change.
+However, within an `Expression`, choosing an overload that requires a `ref struct` instance may result in errors at compile time or runtime, and is a breaking change.
 
-See [#109757](https://github.com/dotnet/runtime/issues/109757), [#110592](https://github.com/dotnet/runtime/issues/110592).
+#### Example 1: `params` span
+
+See [#110592](https://github.com/dotnet/runtime/issues/110592)
+
+```csharp
+Expression<Func<string, string, string>> expr =
+    (x, y) => string.Join("", x, y); // String.Join(string?, params ReadOnlySpan<string?>)
+```
+
+#### Example 2: First-class span types
+
+See [#109757](https://github.com/dotnet/runtime/issues/109757)
+
+```csharp
+Expression<Func<string[], string, bool>> expr =
+    (x, y) => x.Contains(y); // System.MemoryExtensions.Contains<T>(this ReadOnlySpan<T>, T)
+
+var f = expr.Compile(preferInterpretation: true); // TypeLoadException
+```
 
 ## Proposal
 
@@ -17,6 +35,10 @@ Update overload resolution to ignore candidate methods with `ref struct` paramet
 > - ...
 > - **Within an `Expression`, if any parameters of the candidate method, other than `this`, may have a `ref struct` type, the candidate is not applicable.**
 
+*Clarify that `this` refers to the receiver of the instance method, not the first parameter of an extension method?*
+
+*Does overload resolution run when there is only one overload? That is, will we check that one candidate is applicable based on any `ref struct` parameter types?*
+
 Note that the disqualifying parameter:
 - May be an optional parameter
 - May have a *generic type parameter* type with `allows ref struct` constraint
@@ -25,21 +47,18 @@ Note that the disqualifying parameter:
 
 ## Drawbacks
 
-Ignoring certain overloads may be a breaking change itself, in limited scenarios where `ref struct` instances are supported in `Expression` trees currently.
-
-*Examples?*
+Ignoring certain overloads may be a breaking change itself, in limited scenarios where `ref struct` instances are supported within an `Expression` currently. *Examples?*
 
 ## Alternatives
 
 ### No change / IDE fixer
 
 Make no additional compiler changes. Instead, require callers to rewrite `Expression` instances to work around the overload resolution change.
+Instead, an IDE fixer could be provided to rewrite calls in these cases.
 
-An IDE fixer could be provided to rewrite calls in these cases.
+### Support `ref struct` within `Expression` lambdas
 
-### Support `ref struct` in `Expression` trees
-
-The [`Expression` interpreter](https://learn.microsoft.com/en-us/dotnet/api/system.linq.expressions.expression-1.compile?view=net-9.0#system-linq-expressions-expression-1-compile(system-boolean)) relies on *reflection*, so supporting `ref struct` in `Expression` trees would require supporting `ref struct` in reflection or rewriting parts of the interpreter.
+The [`Expression` interpreter](https://learn.microsoft.com/en-us/dotnet/api/system.linq.expressions.expression-1.compile?view=net-9.0#system-linq-expressions-expression-1-compile(system-boolean)) relies on *reflection*, so supporting `ref struct` within `Expression` instances would require supporting `ref struct` in reflection or rewriting parts of the interpreter.
 
 ## Design meetings
 
