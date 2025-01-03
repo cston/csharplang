@@ -27,23 +27,19 @@ var f = expr.Compile(preferInterpretation: true); // TypeLoadException
 
 ## Proposal
 
-Update overload resolution to ignore candidate methods with `ref struct` parameters within `Expression` trees. 
+Update overload resolution to ignore candidate methods with `ref struct` parameters when binding within `Expression` lambdas.
 
 [*12.6.4.2 Applicable function member*](https://github.com/dotnet/csharpstandard/blob/standard-v7/standard/expressions.md#12642-applicable-function-member) is updated as follows:
 
 > - A static method is only applicable if the method group results from a *simple_name* or a *member_access* through a type.
 > - ...
-> - **Within an `Expression`, if any parameters of the candidate method, other than `this`, may have a `ref struct` type, the candidate is not applicable.**
-
-*Clarify that `this` refers to the receiver of the instance method, not the first parameter of an extension method?*
+> - **Within an `Expression`, if any parameters of the candidate method, other than the implicit instance method receiver, may have a `ref struct` type, the candidate is not applicable.**
 
 *Does overload resolution run when there is only one overload? That is, will we check that one candidate is applicable based on any `ref struct` parameter types?*
 
 Note that the disqualifying parameter:
 - May be an optional parameter
 - May have a *generic type parameter* type with `allows ref struct` constraint
-
-*What about method group conversions? Are we considering overloads with `ref struct` parameters in those cases?*
 
 ## Drawbacks
 
