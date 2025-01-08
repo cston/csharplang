@@ -17,7 +17,7 @@ It is an error to apply `[StructLayout]` to a `union` declaration.
 Layout of the emitted struct for the union is determined with the following steps.
 
 1. Emit an instance field for the tag, at offset 0, and set the next available offset.
-1. For each member struct with *known size*, in order from largest to smallest:
+1. For each member struct with *known size*, in order from largest to smallest, ignoring members with no fields:
     1. Find the first member struct already emitted with a *matching* subset of fields.
     1. If a member was found, emit an instance field for the member struct at the offset of the first matching field.
     1. Otherwise, if a member was not found, emit an instance field for the member struct at the next available offset, and advance the next available offset.
@@ -44,6 +44,7 @@ union struct U1<T>
     A(int X, string Y),
     B(string Z),
     C(T T),
+    D,
 }
 ```
 
@@ -55,6 +56,7 @@ struct U1<T>
     struct A { int X; string Y; }
     struct B { string Z; }
     struct C { T T; }
+    struct D { }
     [FieldOffset(0)] int _tag;
     [FieldOffset(4)] A _a;
     [FieldOffset(8)] B _b; // overlap A.Y, B.Z
