@@ -8,7 +8,7 @@ The following represents one possible layout algorithm for fields in the emitted
 It is not the most space-efficient in all cases.
 For example, the algorithm does not attempt to reorder fields or separate fields within a member, even though that might allow overlapping parts of members in additional cases.
 
-Each union *member* has 0 or more fields. That member is represented as a `struct` definition with instance fields for field in declaration order.
+Each union *member* has 0 or more fields. That member is represented as a `struct` definition with instance fields for field in declaration order, and with explicit layout.
 The fields in the member struct definition use `[StructLayout(LayoutKind.Auto)]`.
 If the user needs to control the layout of fields within the member, a custom type should be declared for the member outside the union.
 
@@ -53,10 +53,10 @@ union struct U1<T>
 struct U1<T>
     where T : class
 {
-    struct A { int X; string Y; }
-    struct B { string Z; }
-    struct C { T T; }
-    struct D { }
+    [StructLayout(LayoutKind.Explicit)] struct A { [FieldOffset(0)] int X; [FieldOffset(4)] string Y; }
+    [StructLayout(LayoutKind.Explicit)] struct B { [FieldOffset(0)] string Z; }
+    [StructLayout(LayoutKind.Explicit)] struct C { [FieldOffset(0)] T T; }
+    [StructLayout(LayoutKind.Explicit)] struct D { }
     [FieldOffset(0)] int _tag;
     [FieldOffset(4)] A _a;
     [FieldOffset(8)] B _b; // overlap A.Y, B.Z
@@ -83,10 +83,10 @@ struct U2<T, U>
     where T : unmanaged
     where U : unmanaged
 {
-    struct A { T T; }
-    struct B { U U; }
-    struct C { int X; int Y; }
-    struct D { double X; double Y; }
+    [StructLayout(LayoutKind.Explicit)] struct A { [FieldOffset(0)] T T; }
+    [StructLayout(LayoutKind.Explicit)] struct B { [FieldOffset(0)] U U; }
+    [StructLayout(LayoutKind.Explicit)] struct C { [FieldOffset(0)] int X; [FieldOffset(4)] int Y; }
+    [StructLayout(LayoutKind.Explicit)] struct D { [FieldOffset(0)] double X; [FieldOffset(8)] double Y; }
     [FieldOffset(0)]  int _tag;
     [FieldOffset(4)]  D _d;
     [FieldOffset(4)]  C _c; // overlap D, C
@@ -108,8 +108,8 @@ union struct U1<T, U>
 [StructLayout(LayoutKind.Explicit)]
 struct U1<T, U>
 {
-    struct A { T T; }
-    struct B { U U; }
+    [StructLayout(LayoutKind.Explicit)] struct A { [FieldOffset(0)] T T; }
+    [StructLayout(LayoutKind.Explicit)] struct B { [FieldOffset(0)] U U; }
     struct _UnknownSizes { A _a; B _b; } // no overlap
     [FieldOffset(0)] int _tag;
     [FieldOffset(4)] _UnknownSizes _unknownSizes;
