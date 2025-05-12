@@ -331,10 +331,10 @@ If the target type is an *interface type*, then:
 
   |Interfaces|Candidate signatures|
   |:---:|:---:|
-  |`IEnumerable<E>`<br>`IReadOnlyCollection<E>`<br>`IReadOnlyList<E>`|*None*|
-  |`ICollection<E>`<br>`IList<E>`|`(int capacity)`|
-  |`IReadOnlyDictionary<K, V>`|`(IEqualityComparer<K>? comparer)`|
-  |`IDictionary<K, V>`|`(int capacity)`<br>`(IEqualityComparer<K>? comparer)`<br>`(int capacity, IEqualityComparer<K>? comparer)`|
+  |`IEnumerable<E>`<br>`IReadOnlyCollection<E>`<br>`IReadOnlyList<E>`|`()`|
+  |`ICollection<E>`<br>`IList<E>`|`()`<br>`(int capacity)`|
+  |`IReadOnlyDictionary<K, V>`|`()`<br>`(IEqualityComparer<K>? comparer)`|
+  |`IDictionary<K, V>`|`()`<br>`(int capacity)`<br>`(IEqualityComparer<K>? comparer)`<br>`(int capacity, IEqualityComparer<K>? comparer)`|
 
 * If a best method signature is found, a method with that signature *or an equivalent initialization* is invoked with the *argument list*.
 * Otherwise, a binding error is reported.
